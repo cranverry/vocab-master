@@ -1,6 +1,7 @@
 import { getChapter, getWordData, saveWordData, getUserStats, saveUserStats } from '../modules/storage.js'
 import { sm2, isDue, QUALITY } from '../modules/srs.js'
 import { addXP, updateStreak, checkBadges, XP } from '../modules/gamification.js'
+import { parseSynonymGroups, matchesGroup, normalize } from '../modules/synonymParser.js'
 import { navigate } from '../router.js'
 import { showToast } from '../main.js'
 
@@ -239,40 +240,119 @@ function renderTripleCard(area, w) {
 // ── Copy Practice Mode ────────────────────────────────────
 
 function renderCopyCard(area, w) {
+  const synGroups = parseSynonymGroups(w.synonym)
+
+  // Build synonym group inputs
+  const synInputsHtml = synGroups.length > 0
+    ? synGroups.map((g, i) => `
+      <div class="copy-syn-group" id="syn-group-${i}">
+        <div class="copy-ref-label">${synGroups.length > 1 ? `동의어 그룹 ${i + 1}` : '동의어'}</div>
+        <div class="copy-chars" id="syn-chars-${i}">
+          ${g.split('').map((c, ci) => `<span class="copy-char" data-idx="${ci}">${c}</span>`).join('')}
+        </div>
+        <input type="text" class="syn-input" id="syn-input-${i}"
+          data-target="${g.replace(/"/g, '&quot;')}"
+          data-group="${i}"
+          placeholder="${g}"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          ${i > 0 ? 'disabled' : ''} />
+        <div class="syn-result" id="syn-result-${i}"></div>
+      </div>`).join('')
+    : ''
+
   area.innerHTML = `
   <div class="copy-wrap">
     <div class="copy-ref-card">
-      <div class="copy-ref-row"><span class="copy-ref-label">단어</span><span class="copy-ref-val en">${w.word}</span></div>
-      <div class="copy-ref-row"><span class="copy-ref-label">뜻</span><span class="copy-ref-val">${w.meaning}</span></div>
-      ${w.synonym ? `<div class="copy-ref-row"><span class="copy-ref-label">동의어</span><span class="copy-ref-val">${w.synonym}</span></div>` : ''}
+      <div class="copy-ref-row">
+        <span class="copy-ref-label">단어</span>
+        <span class="copy-ref-val en">${w.word}</span>
+      </div>
+      <div class="copy-ref-row">
+        <span class="copy-ref-label">뜻</span>
+        <span class="copy-ref-val">${w.meaning}</span>
+      </div>
+      ${synGroups.length > 0 ? `<div class="copy-ref-row">
+        <span class="copy-ref-label">동의어</span>
+        <span class="copy-ref-val">${w.synonym}</span>
+      </div>` : ''}
     </div>
-    <div class="copy-instruction">위 단어를 보면서 영단어를 타이핑하세요</div>
-    <div class="copy-input-wrap">
-      <input type="text" id="copy-input" placeholder="${w.word}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+
+    <div class="copy-step" id="copy-step-word">
+      <div class="copy-step-label">Step 1 — 영단어 타이핑</div>
+      <div class="copy-chars" id="word-chars">
+        ${w.word.split('').map((c, i) => `<span class="copy-char" data-idx="${i}">${c}</span>`).join('')}
+      </div>
+      <div class="copy-input-wrap">
+        <input type="text" id="word-input" placeholder="${w.word}"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      </div>
     </div>
-    <div class="copy-chars" id="copy-chars">
-      ${w.word.split('').map((c, i) => `<span class="copy-char" data-idx="${i}">${c}</span>`).join('')}
-    </div>
+
+    ${synGroups.length > 0 ? `
+    <div class="copy-step copy-step-syn" id="copy-step-syn" style="display:none">
+      <div class="copy-step-label">Step 2 — 동의어 타이핑</div>
+      ${synInputsHtml}
+    </div>` : ''}
   </div>`
 
-  const input = document.getElementById('copy-input')
-  input.focus()
+  // ── Step 1: Word input ──
+  const wordInput = document.getElementById('word-input')
+  wordInput.focus()
 
-  input.addEventListener('input', () => {
-    const val = input.value
-    const target = w.word
-    const chars = document.querySelectorAll('.copy-char')
-    chars.forEach((span, i) => {
-      span.classList.remove('correct', 'wrong', 'pending')
-      if (i < val.length) {
-        span.classList.add(val[i].toLowerCase() === target[i].toLowerCase() ? 'correct' : 'wrong')
+  wordInput.addEventListener('input', () => {
+    const val = wordInput.value
+    updateCharFeedback('word-chars', val, w.word)
+    if (normalize(val) === normalize(w.word)) {
+      wordInput.classList.add('copy-done')
+      wordInput.disabled = true
+      if (synGroups.length > 0) {
+        setTimeout(() => {
+          document.getElementById('copy-step-syn').style.display = 'block'
+          document.getElementById('syn-input-0')?.focus()
+        }, 400)
       } else {
-        span.classList.add('pending')
+        setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 600)
       }
+    }
+  })
+
+  // ── Step 2: Synonym group inputs ──
+  if (synGroups.length > 0) {
+    document.querySelectorAll('.syn-input').forEach(input => {
+      input.addEventListener('input', () => {
+        const gi = parseInt(input.dataset.group)
+        const target = synGroups[gi]
+        updateCharFeedback(`syn-chars-${gi}`, input.value, target)
+
+        if (matchesGroup(input.value, target)) {
+          input.classList.add('copy-done')
+          input.disabled = true
+          document.getElementById(`syn-result-${gi}`).innerHTML =
+            `<span class="result-correct">✅ 정확!</span>`
+
+          // Unlock next group
+          const nextInput = document.getElementById(`syn-input-${gi + 1}`)
+          if (nextInput) {
+            nextInput.disabled = false
+            nextInput.focus()
+          } else {
+            // All groups done
+            setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 700)
+          }
+        }
+      })
     })
-    if (val.toLowerCase() === target.toLowerCase()) {
-      input.classList.add('copy-done')
-      setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 600)
+  }
+}
+
+function updateCharFeedback(charsId, val, target) {
+  const chars = document.querySelectorAll(`#${charsId} .copy-char`)
+  chars.forEach((span, i) => {
+    span.classList.remove('correct', 'wrong', 'pending')
+    if (i < val.length) {
+      span.classList.add(val[i].toLowerCase() === target[i]?.toLowerCase() ? 'correct' : 'wrong')
+    } else {
+      span.classList.add('pending')
     }
   })
 }

@@ -461,6 +461,27 @@ html, body {
 .copy-char.wrong   { background: rgba(239,68,68,.2);  color: var(--red); }
 .copy-char.pending { background: var(--bg3); color: var(--text2); }
 
+/* Copy steps */
+.copy-step {
+  background: var(--bg2); border-radius: var(--radius);
+  padding: 16px; display: flex; flex-direction: column; gap: 10px;
+  border: 1px solid var(--bg3);
+}
+.copy-step-label { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; }
+.copy-step-syn { margin-top: 0; }
+.copy-syn-group { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--bg3); }
+.copy-syn-group:first-child { border-top: none; padding-top: 0; }
+.syn-input {
+  width: 100%; background: var(--bg2); border: 1px solid var(--bg3);
+  border-radius: 8px; padding: 10px 12px; color: var(--text);
+  font-size: 15px; outline: none;
+  transition: border-color .15s;
+}
+.syn-input:focus { border-color: var(--primary); }
+.syn-input:disabled { opacity: .5; }
+.syn-input.copy-done { border-color: var(--green); background: rgba(34,197,94,.06); }
+.syn-result { font-size: 13px; min-height: 20px; }
+
 /* Chapter Detail — new button colors */
 .study-btn.copy   { border-left: 3px solid #f59e0b; }
 .study-btn.triple { border-left: 3px solid #a78bfa; }
