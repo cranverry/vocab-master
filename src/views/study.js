@@ -118,55 +118,206 @@ function renderFlashCard(area, w) {
 }
 
 // ── Typing Card ───────────────────────────────────────────
+// Randomly picks one of two question types per card:
+//   T1: 뜻 보여주고 → 단어 타이핑 + 동의어 1개 타이핑
+//   T2: 동의어 1개 보여주고 → 단어 타이핑 + 뜻 자가평가
 
 function renderTypingCard(area, w) {
+  const oneSyn = pickOneSynonym(w)
+  // If no synonym, always use T1
+  const useT2 = oneSyn && Math.random() > 0.5
+  if (useT2) renderTypingT2(area, w, oneSyn)
+  else renderTypingT1(area, w, oneSyn)
+}
+
+// T1: 뜻 → 단어 타이핑 + 동의어 1개 타이핑
+function renderTypingT1(area, w, oneSyn) {
   area.innerHTML = `
   <div class="typing-wrap">
     <div class="typing-prompt">
+      <div class="t-badge">뜻 → 단어 + 동의어</div>
       <div class="typing-meaning">${w.meaning}</div>
-      ${w.synonym ? `<div class="typing-syn">동의어: ${w.synonym}</div>` : ''}
     </div>
-    <div class="typing-input-wrap">
-      <input type="text" id="typing-input" placeholder="영단어를 입력하세요..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-      <button class="hint-btn" id="btn-hint">힌트</button>
+
+    <div class="typing-step" id="t1-step-word">
+      <div class="step-label">영단어 타이핑</div>
+      <div class="typing-input-wrap">
+        <input type="text" id="t1-word-input" placeholder="영단어..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+        <button class="hint-btn" id="btn-hint">힌트</button>
+      </div>
+      <div class="hint-text" id="hint-text"></div>
+      <div class="typing-result" id="t1-word-result"></div>
     </div>
-    <div class="hint-text" id="hint-text"></div>
-    <button class="btn-primary" id="btn-check">확인</button>
-    <div class="typing-result" id="typing-result" style="display:none"></div>
+
+    ${oneSyn ? `
+    <div class="typing-step" id="t1-step-syn" style="display:none">
+      <div class="step-label">동의어 타이핑 (1개)</div>
+      <div class="typing-input-wrap">
+        <input type="text" id="t1-syn-input" placeholder="동의어..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      </div>
+      <div class="typing-result" id="t1-syn-result"></div>
+      <button class="btn-primary" id="btn-t1-check" style="margin-top:8px">확인</button>
+    </div>` : `
+    <button class="btn-primary" id="btn-t1-check-notsyn" style="display:none;margin-top:8px">다음</button>`}
   </div>`
 
-  const input = document.getElementById('typing-input')
-  input.focus()
-
+  const wordInput = document.getElementById('t1-word-input')
+  wordInput.focus()
   let hintLevel = 0
+
   document.getElementById('btn-hint').addEventListener('click', () => {
     hintLevel++
-    const hint = w.word.split('').map((c, i) => i < hintLevel ? c : '_').join(' ')
-    document.getElementById('hint-text').textContent = hint
+    document.getElementById('hint-text').textContent =
+      w.word.split('').map((c, i) => i < hintLevel ? c : '_').join(' ')
   })
 
-  function check() {
-    const answer = input.value.trim().toLowerCase()
-    const correct = w.word.toLowerCase()
-    const isCorrect = answer === correct
-
-    const resultEl = document.getElementById('typing-result')
-    resultEl.style.display = 'block'
-
+  function checkWord() {
+    const isCorrect = normalize(wordInput.value) === normalize(w.word)
+    const res = document.getElementById('t1-word-result')
     if (isCorrect) {
-      resultEl.innerHTML = `<div class="result-correct">✅ 정답! <strong>${w.word}</strong></div>`
-      const xpGain = hintLevel === 0 ? XP.typing_correct : XP.typing_hint
-      setTimeout(() => processResult(w, QUALITY.good, xpGain, true), 900)
+      res.innerHTML = `<div class="result-correct">✅ <strong>${w.word}</strong></div>`
+      wordInput.disabled = true
+      if (oneSyn) {
+        document.getElementById('t1-step-syn').style.display = 'block'
+        document.getElementById('t1-syn-input').focus()
+      } else {
+        const btn = document.getElementById('btn-t1-check-notsyn')
+        if (btn) { btn.style.display = 'block' }
+        else { setTimeout(() => processResult(w, QUALITY.good, hintLevel === 0 ? XP.typing_correct : XP.typing_hint, true), 700) }
+      }
     } else {
-      resultEl.innerHTML = `<div class="result-wrong">❌ 오답 — 정답: <strong>${w.word}</strong></div>`
-      setTimeout(() => processResult(w, QUALITY.again, XP.typing_wrong, false), 1200)
+      res.innerHTML = `<div class="result-wrong">❌ 정답: <strong>${w.word}</strong></div>`
+      wordInput.disabled = true
+      if (oneSyn) {
+        document.getElementById('t1-step-syn').style.display = 'block'
+        document.getElementById('t1-syn-input').focus()
+      }
+      // Mark as wrong for SRS regardless
+      if (!oneSyn) setTimeout(() => processResult(w, QUALITY.again, XP.typing_wrong, false), 800)
     }
-    document.getElementById('btn-check').disabled = true
-    input.disabled = true
   }
 
-  document.getElementById('btn-check').addEventListener('click', check)
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') check() })
+  wordInput.addEventListener('keydown', e => { if (e.key === 'Enter') checkWord() })
+  document.getElementById('btn-hint')?.addEventListener('click', () => {})
+
+  // Auto-check on correct match while typing
+  wordInput.addEventListener('input', () => {
+    if (normalize(wordInput.value) === normalize(w.word)) checkWord()
+  })
+
+  if (oneSyn) {
+    const synInput = document.getElementById('t1-syn-input')
+    let wordCorrect = false
+
+    // Re-evaluate after word step
+    const origCheck = checkWord
+    wordInput.addEventListener('input', () => {
+      wordCorrect = normalize(wordInput.value) === normalize(w.word)
+    })
+
+    document.getElementById('btn-t1-check').addEventListener('click', () => {
+      const synCorrect = matchesItem(synInput.value, oneSyn)
+      const res = document.getElementById('t1-syn-result')
+      if (synCorrect) {
+        res.innerHTML = `<div class="result-correct">✅ <strong>${oneSyn}</strong></div>`
+      } else {
+        res.innerHTML = `<div class="result-wrong">❌ 정답: <strong>${oneSyn}</strong></div>`
+      }
+      synInput.disabled = true
+      document.getElementById('btn-t1-check').disabled = true
+      const wordWasCorrect = normalize(document.getElementById('t1-word-result').textContent).includes(w.word.toLowerCase()) &&
+        !document.getElementById('t1-word-result').innerHTML.includes('result-wrong')
+      const bothCorrect = wordWasCorrect && synCorrect
+      const xp = bothCorrect ? (hintLevel === 0 ? XP.typing_correct : XP.typing_hint) : XP.typing_wrong
+      setTimeout(() => processResult(w, bothCorrect ? QUALITY.good : QUALITY.again, xp, bothCorrect), 900)
+    })
+
+    synInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('btn-t1-check').click()
+    })
+  }
+
+  document.getElementById('btn-t1-check-notsyn')?.addEventListener('click', () => {
+    processResult(w, QUALITY.good, hintLevel === 0 ? XP.typing_correct : XP.typing_hint, true)
+  })
+}
+
+// T2: 동의어 1개 → 단어 타이핑 + 뜻 자가평가
+function renderTypingT2(area, w, oneSyn) {
+  area.innerHTML = `
+  <div class="typing-wrap">
+    <div class="typing-prompt">
+      <div class="t-badge">동의어 → 단어 + 뜻</div>
+      <div class="typing-meaning">${oneSyn}</div>
+    </div>
+
+    <div class="typing-step">
+      <div class="step-label">영단어 타이핑</div>
+      <div class="typing-input-wrap">
+        <input type="text" id="t2-word-input" placeholder="영단어..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+        <button class="hint-btn" id="btn-hint">힌트</button>
+      </div>
+      <div class="hint-text" id="hint-text"></div>
+      <div class="typing-result" id="t2-word-result"></div>
+    </div>
+
+    <div class="typing-step" id="t2-step-meaning" style="display:none">
+      <div class="step-label">뜻 — 알고 있었나요?</div>
+      <button class="reveal-btn" id="btn-reveal-meaning">뜻 확인하기</button>
+      <div class="meaning-text" id="t2-meaning-text" style="display:none">${w.meaning}</div>
+    </div>
+
+    <div class="rating-row" id="rating-row" style="display:none">
+      <button class="rating-btn again"  data-q="again">몰랐음</button>
+      <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
+      <button class="rating-btn good"   data-q="good">알았음</button>
+      <button class="rating-btn perfect" data-q="perfect">완벽</button>
+    </div>
+  </div>`
+
+  const input = document.getElementById('t2-word-input')
+  input.focus()
+  let hintLevel = 0
+  let wordCorrect = false
+
+  document.getElementById('btn-hint').addEventListener('click', () => {
+    hintLevel++
+    document.getElementById('hint-text').textContent =
+      w.word.split('').map((c, i) => i < hintLevel ? c : '_').join(' ')
+  })
+
+  function checkWord() {
+    wordCorrect = normalize(input.value) === normalize(w.word)
+    const res = document.getElementById('t2-word-result')
+    if (wordCorrect) {
+      res.innerHTML = `<div class="result-correct">✅ <strong>${w.word}</strong></div>`
+    } else {
+      res.innerHTML = `<div class="result-wrong">❌ 정답: <strong>${w.word}</strong></div>`
+    }
+    input.disabled = true
+    document.getElementById('t2-step-meaning').style.display = 'block'
+  }
+
+  input.addEventListener('input', () => {
+    if (normalize(input.value) === normalize(w.word)) checkWord()
+  })
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') checkWord() })
+
+  document.getElementById('btn-reveal-meaning').addEventListener('click', () => {
+    document.getElementById('btn-reveal-meaning').style.display = 'none'
+    document.getElementById('t2-meaning-text').style.display = 'block'
+    document.getElementById('rating-row').style.display = 'grid'
+  })
+
+  document.getElementById('rating-row').addEventListener('click', e => {
+    const btn = e.target.closest('.rating-btn')
+    if (!btn) return
+    const q = QUALITY[btn.dataset.q]
+    const finalCorrect = wordCorrect && q >= 3
+    processResult(w, wordCorrect ? q : QUALITY.again,
+      finalCorrect ? (hintLevel === 0 ? XP.typing_correct : XP.typing_hint) : XP.typing_wrong,
+      finalCorrect)
+  })
 }
 
 // ── Triple Mode (3-direction) ─────────────────────────────

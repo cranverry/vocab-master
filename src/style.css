@@ -382,6 +382,18 @@ html, body {
 .result-correct { color: var(--green); font-size: 16px; font-weight: 600; text-align: center; padding: 8px; }
 .result-wrong   { color: var(--red);   font-size: 16px; font-weight: 600; text-align: center; padding: 8px; }
 
+.t-badge {
+  display: inline-block; background: rgba(59,130,246,.15); color: var(--blue);
+  border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700;
+  margin-bottom: 10px; letter-spacing: .3px;
+}
+.typing-step {
+  background: var(--bg2); border-radius: var(--radius);
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  border: 1px solid var(--bg3);
+}
+.step-label { font-size: 12px; font-weight: 700; color: var(--text2); }
+
 /* Summary */
 .summary-card {
   background: var(--bg2); border-radius: 20px;
