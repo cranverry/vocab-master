@@ -1,7 +1,7 @@
 import { getChapter, getWordData, saveWordData, getUserStats, saveUserStats } from '../modules/storage.js'
 import { sm2, isDue, QUALITY } from '../modules/srs.js'
 import { addXP, updateStreak, checkBadges, XP } from '../modules/gamification.js'
-import { parseSynonymGroups, matchesGroup, normalize } from '../modules/synonymParser.js'
+import { parseSynonymGroups, matchesItem, normalize } from '../modules/synonymParser.js'
 import { navigate } from '../router.js'
 import { showToast } from '../main.js'
 
@@ -240,25 +240,51 @@ function renderTripleCard(area, w) {
 // ── Copy Practice Mode ────────────────────────────────────
 
 function renderCopyCard(area, w) {
-  const synGroups = parseSynonymGroups(w.synonym)
+  // groups: Array<Array<string>>  e.g. [["promise","contract"], ["reserve","book"]]
+  const groups = parseSynonymGroups(w.synonym)
 
-  // Build synonym group inputs
-  const synInputsHtml = synGroups.length > 0
-    ? synGroups.map((g, i) => `
-      <div class="copy-syn-group" id="syn-group-${i}">
-        <div class="copy-ref-label">${synGroups.length > 1 ? `동의어 그룹 ${i + 1}` : '동의어'}</div>
-        <div class="copy-chars" id="syn-chars-${i}">
-          ${g.split('').map((c, ci) => `<span class="copy-char" data-idx="${ci}">${c}</span>`).join('')}
-        </div>
-        <input type="text" class="syn-input" id="syn-input-${i}"
-          data-target="${g.replace(/"/g, '&quot;')}"
-          data-group="${i}"
-          placeholder="${g}"
-          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-          ${i > 0 ? 'disabled' : ''} />
-        <div class="syn-result" id="syn-result-${i}"></div>
-      </div>`).join('')
-    : ''
+  // Flatten to a sequential list of items with group/item indices
+  // items: [{groupIdx, itemIdx, target, inputId, charsId}]
+  const items = []
+  groups.forEach((group, gi) => {
+    group.forEach((item, ii) => {
+      items.push({
+        groupIdx: gi,
+        itemIdx: ii,
+        target: item,
+        inputId: `syn-input-${gi}-${ii}`,
+        charsId: `syn-chars-${gi}-${ii}`
+      })
+    })
+  })
+  const totalItems = items.length
+
+  // Build synonym inputs HTML
+  const synStepHtml = totalItems > 0 ? `
+    <div class="copy-step copy-step-syn" id="copy-step-syn" style="display:none">
+      <div class="copy-step-label">Step 2 — 동의어 타이핑 (총 ${totalItems}개)</div>
+      ${groups.map((group, gi) => `
+        <div class="copy-syn-group">
+          ${groups.length > 1 ? `<div class="copy-group-label">그룹 ${gi + 1}</div>` : ''}
+          ${group.map((item, ii) => `
+            <div class="copy-item-wrap" id="item-wrap-${gi}-${ii}">
+              <div class="copy-chars" id="syn-chars-${gi}-${ii}">
+                ${item.split('').map((c, ci) =>
+                  `<span class="copy-char" data-idx="${ci}">${c}</span>`
+                ).join('')}
+              </div>
+              <div class="copy-input-row">
+                <input type="text" class="syn-input"
+                  id="syn-input-${gi}-${ii}"
+                  data-gi="${gi}" data-ii="${ii}"
+                  placeholder="${item}"
+                  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                  disabled />
+                <span class="item-check" id="item-check-${gi}-${ii}"></span>
+              </div>
+            </div>`).join('')}
+        </div>`).join('')}
+    </div>` : ''
 
   area.innerHTML = `
   <div class="copy-wrap">
@@ -271,7 +297,7 @@ function renderCopyCard(area, w) {
         <span class="copy-ref-label">뜻</span>
         <span class="copy-ref-val">${w.meaning}</span>
       </div>
-      ${synGroups.length > 0 ? `<div class="copy-ref-row">
+      ${totalItems > 0 ? `<div class="copy-ref-row">
         <span class="copy-ref-label">동의어</span>
         <span class="copy-ref-val">${w.synonym}</span>
       </div>` : ''}
@@ -288,27 +314,22 @@ function renderCopyCard(area, w) {
       </div>
     </div>
 
-    ${synGroups.length > 0 ? `
-    <div class="copy-step copy-step-syn" id="copy-step-syn" style="display:none">
-      <div class="copy-step-label">Step 2 — 동의어 타이핑</div>
-      ${synInputsHtml}
-    </div>` : ''}
+    ${synStepHtml}
   </div>`
 
-  // ── Step 1: Word input ──
+  // ── Step 1: Word ──
   const wordInput = document.getElementById('word-input')
   wordInput.focus()
 
   wordInput.addEventListener('input', () => {
-    const val = wordInput.value
-    updateCharFeedback('word-chars', val, w.word)
-    if (normalize(val) === normalize(w.word)) {
+    updateCharFeedback('word-chars', wordInput.value, w.word)
+    if (normalize(wordInput.value) === normalize(w.word)) {
       wordInput.classList.add('copy-done')
       wordInput.disabled = true
-      if (synGroups.length > 0) {
+      if (totalItems > 0) {
         setTimeout(() => {
           document.getElementById('copy-step-syn').style.display = 'block'
-          document.getElementById('syn-input-0')?.focus()
+          activateSynItem(0)
         }, 400)
       } else {
         setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 600)
@@ -316,33 +337,42 @@ function renderCopyCard(area, w) {
     }
   })
 
-  // ── Step 2: Synonym group inputs ──
-  if (synGroups.length > 0) {
-    document.querySelectorAll('.syn-input').forEach(input => {
-      input.addEventListener('input', () => {
-        const gi = parseInt(input.dataset.group)
-        const target = synGroups[gi]
-        updateCharFeedback(`syn-chars-${gi}`, input.value, target)
+  // ── Step 2: Individual synonym items ──
+  let currentItemIdx = 0
 
-        if (matchesGroup(input.value, target)) {
-          input.classList.add('copy-done')
-          input.disabled = true
-          document.getElementById(`syn-result-${gi}`).innerHTML =
-            `<span class="result-correct">✅ 정확!</span>`
-
-          // Unlock next group
-          const nextInput = document.getElementById(`syn-input-${gi + 1}`)
-          if (nextInput) {
-            nextInput.disabled = false
-            nextInput.focus()
-          } else {
-            // All groups done
-            setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 700)
-          }
-        }
-      })
-    })
+  function activateSynItem(idx) {
+    if (idx >= items.length) {
+      setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 700)
+      return
+    }
+    const { inputId } = items[idx]
+    const input = document.getElementById(inputId)
+    if (input) { input.disabled = false; input.focus() }
   }
+
+  document.querySelectorAll('.syn-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const gi = parseInt(input.dataset.gi)
+      const ii = parseInt(input.dataset.ii)
+      const flatIdx = items.findIndex(it => it.groupIdx === gi && it.itemIdx === ii)
+      const { target, charsId } = items[flatIdx]
+
+      updateCharFeedback(charsId, input.value, target)
+
+      if (matchesItem(input.value, target)) {
+        input.classList.add('copy-done')
+        input.disabled = true
+        const check = document.getElementById(`item-check-${gi}-${ii}`)
+        if (check) check.textContent = '✅'
+        currentItemIdx = flatIdx + 1
+        activateSynItem(currentItemIdx)
+      }
+    })
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !input.disabled) input.dispatchEvent(new Event('input'))
+    })
+  })
 }
 
 function updateCharFeedback(charsId, val, target) {

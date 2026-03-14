@@ -471,6 +471,11 @@ html, body {
 .copy-step-syn { margin-top: 0; }
 .copy-syn-group { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--bg3); }
 .copy-syn-group:first-child { border-top: none; padding-top: 0; }
+.copy-group-label { font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.copy-item-wrap { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--bg3); border-radius: 8px; }
+.copy-input-row { display: flex; align-items: center; gap: 8px; }
+.copy-input-row .syn-input { flex: 1; }
+.item-check { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
 .syn-input {
   width: 100%; background: var(--bg2); border: 1px solid var(--bg3);
   border-radius: 8px; padding: 10px 12px; color: var(--text);
