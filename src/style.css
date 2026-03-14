@@ -405,6 +405,66 @@ html, body {
   100% { opacity:0; transform: translate(-50%, -120%); }
 }
 
+/* ── Triple Mode ───────────────────────────────────────── */
+.triple-type-badge {
+  display: inline-block;
+  background: rgba(167,139,250,.15);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  align-self: flex-start;
+}
+.flashcard-wrap { display: flex; flex-direction: column; }
+.fc-syn-big { font-size: 18px; font-weight: 700; color: var(--accent); text-align: center; line-height: 1.6; }
+.triple-answer { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.ans-row { display: flex; flex-direction: column; gap: 4px; }
+.ans-label { font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.ans-val { font-size: 18px; font-weight: 700; line-height: 1.4; }
+.ans-val.en { font-size: 22px; color: var(--accent); }
+
+/* ── Copy Practice ─────────────────────────────────────── */
+.copy-wrap { display: flex; flex-direction: column; gap: 14px; }
+.copy-ref-card {
+  background: var(--bg2); border-radius: var(--radius);
+  padding: 20px; border: 1px solid var(--bg3);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.copy-ref-row { display: flex; flex-direction: column; gap: 3px; }
+.copy-ref-label { font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.copy-ref-val { font-size: 16px; font-weight: 600; line-height: 1.4; }
+.copy-ref-val.en { font-size: 22px; color: var(--accent); font-weight: 800; }
+.copy-instruction { font-size: 13px; color: var(--text2); text-align: center; }
+.copy-input-wrap input {
+  width: 100%; background: var(--bg2); border: 1px solid var(--bg3);
+  border-radius: 10px; padding: 14px 16px; color: var(--text);
+  font-size: 20px; outline: none; text-align: center; font-weight: 700;
+  transition: border-color .2s;
+}
+.copy-input-wrap input:focus { border-color: var(--primary); }
+.copy-input-wrap input.copy-done { border-color: var(--green); background: rgba(34,197,94,.08); }
+.copy-chars {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  justify-content: center; padding: 8px 0;
+}
+.copy-char {
+  font-size: 24px; font-weight: 800;
+  width: 34px; height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  background: var(--bg3); color: var(--text2);
+  transition: background .15s, color .15s;
+}
+.copy-char.correct { background: rgba(34,197,94,.2); color: var(--green); }
+.copy-char.wrong   { background: rgba(239,68,68,.2);  color: var(--red); }
+.copy-char.pending { background: var(--bg3); color: var(--text2); }
+
+/* Chapter Detail — new button colors */
+.study-btn.copy   { border-left: 3px solid #f59e0b; }
+.study-btn.triple { border-left: 3px solid #a78bfa; }
+
 /* ── Stats ─────────────────────────────────────────────── */
 .stat-grid {
   display: grid; grid-template-columns: 1fr 1fr;

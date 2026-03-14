@@ -45,7 +45,7 @@ export function renderStudy({ chapterId: cid, mode: m } = {}) {
 }
 
 function modeLabel(m) {
-  return { flashcard: '플래시카드', typing: '타이핑', srs: 'SRS 복습' }[m] || m
+  return { flashcard: '플래시카드', typing: '타이핑', srs: 'SRS 복습', triple: '3방향 테스트', copy: '쓰기 연습' }[m] || m
 }
 
 export function setupStudy({ chapterId: cid, mode: m } = {}) {
@@ -65,6 +65,10 @@ function renderCard() {
 
   if (mode === 'typing') {
     renderTypingCard(area, w)
+  } else if (mode === 'triple') {
+    renderTripleCard(area, w)
+  } else if (mode === 'copy') {
+    renderCopyCard(area, w)
   } else {
     renderFlashCard(area, w)
   }
@@ -162,6 +166,115 @@ function renderTypingCard(area, w) {
 
   document.getElementById('btn-check').addEventListener('click', check)
   input.addEventListener('keydown', e => { if (e.key === 'Enter') check() })
+}
+
+// ── Triple Mode (3-direction) ─────────────────────────────
+
+const TRIPLE_TYPES = ['word2meaning', 'meaning2word', 'synonym2both']
+
+function renderTripleCard(area, w) {
+  // Pick question type based on word index for even distribution
+  const qType = TRIPLE_TYPES[idx % 3]
+  let prompt = '', promptLabel = '', answerHtml = ''
+
+  if (qType === 'word2meaning') {
+    promptLabel = '단어'
+    prompt = `<div class="fc-word">${w.word}</div>`
+    answerHtml = `
+      <div class="triple-answer">
+        <div class="ans-row"><span class="ans-label">뜻</span><span class="ans-val">${w.meaning}</span></div>
+        ${w.synonym ? `<div class="ans-row"><span class="ans-label">동의어</span><span class="ans-val">${w.synonym}</span></div>` : ''}
+      </div>`
+  } else if (qType === 'meaning2word') {
+    promptLabel = '뜻'
+    prompt = `<div class="fc-meaning">${w.meaning}</div>`
+    answerHtml = `
+      <div class="triple-answer">
+        <div class="ans-row"><span class="ans-label">단어</span><span class="ans-val en">${w.word}</span></div>
+        ${w.synonym ? `<div class="ans-row"><span class="ans-label">동의어</span><span class="ans-val">${w.synonym}</span></div>` : ''}
+      </div>`
+  } else {
+    promptLabel = '동의어'
+    prompt = `<div class="fc-syn-big">${w.synonym || w.word}</div>`
+    answerHtml = `
+      <div class="triple-answer">
+        <div class="ans-row"><span class="ans-label">단어</span><span class="ans-val en">${w.word}</span></div>
+        <div class="ans-row"><span class="ans-label">뜻</span><span class="ans-val">${w.meaning}</span></div>
+      </div>`
+  }
+
+  area.innerHTML = `
+  <div class="flashcard-wrap">
+    <div class="triple-type-badge">${promptLabel} 보고 맞추기</div>
+    <div class="flashcard" id="fc">
+      <div class="fc-front">
+        ${prompt}
+        <div class="fc-hint">탭하여 답 확인</div>
+      </div>
+      <div class="fc-back" style="display:none">
+        ${answerHtml}
+      </div>
+    </div>
+    <div class="rating-row" id="rating-row" style="display:none">
+      <button class="rating-btn again"  data-q="again">몰랐음</button>
+      <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
+      <button class="rating-btn good"   data-q="good">알았음</button>
+      <button class="rating-btn perfect" data-q="perfect">완벽</button>
+    </div>
+  </div>`
+
+  document.getElementById('fc').addEventListener('click', () => {
+    document.querySelector('.fc-front').style.display = 'none'
+    document.querySelector('.fc-back').style.display = 'flex'
+    document.getElementById('rating-row').style.display = 'grid'
+  })
+  document.getElementById('rating-row').addEventListener('click', e => {
+    const btn = e.target.closest('.rating-btn')
+    if (!btn) return
+    const quality = QUALITY[btn.dataset.q]
+    processResult(w, quality, quality >= 4 ? XP.flashcard_good : XP.flashcard_again, quality >= 3)
+  })
+}
+
+// ── Copy Practice Mode ────────────────────────────────────
+
+function renderCopyCard(area, w) {
+  area.innerHTML = `
+  <div class="copy-wrap">
+    <div class="copy-ref-card">
+      <div class="copy-ref-row"><span class="copy-ref-label">단어</span><span class="copy-ref-val en">${w.word}</span></div>
+      <div class="copy-ref-row"><span class="copy-ref-label">뜻</span><span class="copy-ref-val">${w.meaning}</span></div>
+      ${w.synonym ? `<div class="copy-ref-row"><span class="copy-ref-label">동의어</span><span class="copy-ref-val">${w.synonym}</span></div>` : ''}
+    </div>
+    <div class="copy-instruction">위 단어를 보면서 영단어를 타이핑하세요</div>
+    <div class="copy-input-wrap">
+      <input type="text" id="copy-input" placeholder="${w.word}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    </div>
+    <div class="copy-chars" id="copy-chars">
+      ${w.word.split('').map((c, i) => `<span class="copy-char" data-idx="${i}">${c}</span>`).join('')}
+    </div>
+  </div>`
+
+  const input = document.getElementById('copy-input')
+  input.focus()
+
+  input.addEventListener('input', () => {
+    const val = input.value
+    const target = w.word
+    const chars = document.querySelectorAll('.copy-char')
+    chars.forEach((span, i) => {
+      span.classList.remove('correct', 'wrong', 'pending')
+      if (i < val.length) {
+        span.classList.add(val[i].toLowerCase() === target[i].toLowerCase() ? 'correct' : 'wrong')
+      } else {
+        span.classList.add('pending')
+      }
+    })
+    if (val.toLowerCase() === target.toLowerCase()) {
+      input.classList.add('copy-done')
+      setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 600)
+    }
+  })
 }
 
 // ── Process Result ────────────────────────────────────────
