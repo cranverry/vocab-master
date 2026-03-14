@@ -186,41 +186,21 @@ function pickOneSynonym(w) {
 
 function renderTripleCard(area, w) {
   const qType = TRIPLE_TYPES[idx % 3]
+  // Always pick ONE synonym for this card
+  const oneSyn = pickOneSynonym(w)
 
   if (qType === 'word2meaning') {
-    renderTripleA(area, w)
+    renderTripleA(area, w, oneSyn)
   } else if (qType === 'meaning2word') {
-    renderTripleB(area, w)
+    renderTripleB(area, w, oneSyn)
   } else {
-    const oneSyn = pickOneSynonym(w)
-    if (!oneSyn) {
-      // No synonyms → fall back to B
-      renderTripleB(area, w)
-    } else {
-      renderTripleC(area, w, oneSyn)
-    }
+    if (!oneSyn) renderTripleB(area, w, null)
+    else renderTripleC(area, w, oneSyn)
   }
 }
 
-// A: 단어 → 뜻(자가평가) + 동의어(타이핑)
-function renderTripleA(area, w) {
-  const groups = parseSynonymGroups(w.synonym)
-  const flat = groups.flat()
-
-  const synInputsHtml = flat.map((item, i) => `
-    <div class="copy-item-wrap" style="margin-top:6px">
-      <div class="copy-chars" id="ta-chars-${i}">
-        ${item.split('').map((c, ci) => `<span class="copy-char">${c}</span>`).join('')}
-      </div>
-      <div class="copy-input-row">
-        <input type="text" class="syn-input ta-input" id="ta-input-${i}"
-          data-idx="${i}" data-target="${item.replace(/"/g,'&quot;')}"
-          placeholder="${item}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-          ${i > 0 ? 'disabled' : ''} />
-        <span class="item-check" id="ta-check-${i}"></span>
-      </div>
-    </div>`).join('')
-
+// A: 단어 → 뜻(자가평가) + 동의어 1개(타이핑)
+function renderTripleA(area, w, oneSyn) {
   area.innerHTML = `
   <div class="triple-wrap">
     <div class="triple-type-badge">단어 → 뜻 + 동의어</div>
@@ -231,16 +211,20 @@ function renderTripleA(area, w) {
 
     <div class="triple-section">
       <div class="triple-section-label">뜻 — 알고 있었나요?</div>
-      <div class="triple-meaning-hidden" id="meaning-reveal">
-        <button class="reveal-btn" id="btn-reveal-meaning">뜻 확인하기</button>
-        <div class="meaning-text" id="meaning-text" style="display:none">${w.meaning}</div>
-      </div>
+      <button class="reveal-btn" id="btn-reveal-meaning">뜻 확인하기</button>
+      <div class="meaning-text" id="meaning-text" style="display:none">${w.meaning}</div>
     </div>
 
-    ${flat.length > 0 ? `
+    ${oneSyn ? `
     <div class="triple-section" id="syn-section" style="display:none">
-      <div class="triple-section-label">동의어 타이핑 (총 ${flat.length}개)</div>
-      ${synInputsHtml}
+      <div class="triple-section-label">동의어 타이핑 (1개)</div>
+      <div class="copy-chars" id="ta-chars">
+        ${oneSyn.split('').map(c => `<span class="copy-char">${c}</span>`).join('')}
+      </div>
+      <div class="copy-input-wrap">
+        <input type="text" id="ta-input" placeholder="${oneSyn}"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      </div>
     </div>` : ''}
 
     <div class="rating-row" id="rating-row" style="display:none">
@@ -254,31 +238,23 @@ function renderTripleA(area, w) {
   document.getElementById('btn-reveal-meaning').addEventListener('click', () => {
     document.getElementById('btn-reveal-meaning').style.display = 'none'
     document.getElementById('meaning-text').style.display = 'block'
-    if (flat.length > 0) {
+    if (oneSyn) {
       document.getElementById('syn-section').style.display = 'block'
-      document.getElementById('ta-input-0')?.focus()
+      document.getElementById('ta-input')?.focus()
     } else {
       document.getElementById('rating-row').style.display = 'grid'
     }
   })
 
-  // Synonym typing
-  let cur = 0
-  document.querySelectorAll('.ta-input').forEach(input => {
-    input.addEventListener('input', () => {
-      const i = parseInt(input.dataset.idx)
-      const target = input.dataset.target
-      updateCharFeedback(`ta-chars-${i}`, input.value, target)
-      if (matchesItem(input.value, target)) {
-        input.classList.add('copy-done'); input.disabled = true
-        document.getElementById(`ta-check-${i}`).textContent = '✅'
-        cur = i + 1
-        const next = document.getElementById(`ta-input-${cur}`)
-        if (next) { next.disabled = false; next.focus() }
-        else { document.getElementById('rating-row').style.display = 'grid' }
+  if (oneSyn) {
+    document.getElementById('ta-input').addEventListener('input', e => {
+      updateCharFeedback('ta-chars', e.target.value, oneSyn)
+      if (matchesItem(e.target.value, oneSyn)) {
+        e.target.classList.add('copy-done'); e.target.disabled = true
+        document.getElementById('rating-row').style.display = 'grid'
       }
     })
-  })
+  }
 
   document.getElementById('rating-row').addEventListener('click', e => {
     const btn = e.target.closest('.rating-btn')
@@ -288,8 +264,8 @@ function renderTripleA(area, w) {
   })
 }
 
-// B: 뜻 → 단어(타이핑) + 동의어(자가평가)
-function renderTripleB(area, w) {
+// B: 뜻 → 단어(타이핑) + 동의어 1개(자가평가)
+function renderTripleB(area, w, oneSyn) {
   area.innerHTML = `
   <div class="triple-wrap">
     <div class="triple-type-badge">뜻 → 단어 + 동의어</div>
@@ -309,11 +285,12 @@ function renderTripleB(area, w) {
       </div>
     </div>
 
+    ${oneSyn ? `
     <div class="triple-section" id="b-syn-section" style="display:none">
-      <div class="triple-section-label">동의어 — 알고 있었나요?</div>
+      <div class="triple-section-label">동의어 (1개) — 알고 있었나요?</div>
       <button class="reveal-btn" id="btn-reveal-syn">동의어 확인하기</button>
-      <div class="meaning-text" id="syn-reveal-text" style="display:none">${w.synonym || '(없음)'}</div>
-    </div>
+      <div class="meaning-text" id="syn-reveal-text" style="display:none">${oneSyn}</div>
+    </div>` : ''}
 
     <div class="rating-row" id="rating-row" style="display:none">
       <button class="rating-btn again"  data-q="again">몰랐음</button>
@@ -329,15 +306,18 @@ function renderTripleB(area, w) {
     updateCharFeedback('b-chars', input.value, w.word)
     if (normalize(input.value) === normalize(w.word)) {
       input.classList.add('copy-done'); input.disabled = true
-      document.getElementById('b-syn-section').style.display = 'block'
+      if (oneSyn) document.getElementById('b-syn-section').style.display = 'block'
+      else document.getElementById('rating-row').style.display = 'grid'
     }
   })
 
-  document.getElementById('btn-reveal-syn').addEventListener('click', () => {
-    document.getElementById('btn-reveal-syn').style.display = 'none'
-    document.getElementById('syn-reveal-text').style.display = 'block'
-    document.getElementById('rating-row').style.display = 'grid'
-  })
+  if (oneSyn) {
+    document.getElementById('btn-reveal-syn').addEventListener('click', () => {
+      document.getElementById('btn-reveal-syn').style.display = 'none'
+      document.getElementById('syn-reveal-text').style.display = 'block'
+      document.getElementById('rating-row').style.display = 'grid'
+    })
+  }
 
   document.getElementById('rating-row').addEventListener('click', e => {
     const btn = e.target.closest('.rating-btn')
@@ -372,7 +352,6 @@ function renderTripleC(area, w, oneSyn) {
       <div class="triple-section-label">뜻 — 알고 있었나요?</div>
       <button class="reveal-btn" id="btn-reveal-c-meaning">뜻 확인하기</button>
       <div class="meaning-text" id="c-meaning-text" style="display:none">${w.meaning}</div>
-      <div class="meaning-text" style="display:none;color:var(--accent)" id="c-syn-all-text">전체 동의어: ${w.synonym}</div>
     </div>
 
     <div class="rating-row" id="rating-row" style="display:none">
