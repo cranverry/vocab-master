@@ -170,52 +170,79 @@ function renderTypingCard(area, w) {
 }
 
 // ── Triple Mode (3-direction) ─────────────────────────────
+//
+// A. 단어 → 뜻+동의어   : 단어 보여줌 → 뜻 자가평가 + 동의어 타이핑
+// B. 뜻  → 단어+동의어   : 뜻  보여줌 → 단어 타이핑 + 동의어 자가평가
+// C. 동의어 → 단어+뜻    : 동의어 1개 보여줌 → 단어 타이핑 + 뜻 자가평가
 
 const TRIPLE_TYPES = ['word2meaning', 'meaning2word', 'synonym2both']
 
+function pickOneSynonym(w) {
+  const groups = parseSynonymGroups(w.synonym)
+  const flat = groups.flat()
+  if (!flat.length) return null
+  return flat[Math.floor(Math.random() * flat.length)]
+}
+
 function renderTripleCard(area, w) {
-  // Pick question type based on word index for even distribution
   const qType = TRIPLE_TYPES[idx % 3]
-  let prompt = '', promptLabel = '', answerHtml = ''
 
   if (qType === 'word2meaning') {
-    promptLabel = '단어'
-    prompt = `<div class="fc-word">${w.word}</div>`
-    answerHtml = `
-      <div class="triple-answer">
-        <div class="ans-row"><span class="ans-label">뜻</span><span class="ans-val">${w.meaning}</span></div>
-        ${w.synonym ? `<div class="ans-row"><span class="ans-label">동의어</span><span class="ans-val">${w.synonym}</span></div>` : ''}
-      </div>`
+    renderTripleA(area, w)
   } else if (qType === 'meaning2word') {
-    promptLabel = '뜻'
-    prompt = `<div class="fc-meaning">${w.meaning}</div>`
-    answerHtml = `
-      <div class="triple-answer">
-        <div class="ans-row"><span class="ans-label">단어</span><span class="ans-val en">${w.word}</span></div>
-        ${w.synonym ? `<div class="ans-row"><span class="ans-label">동의어</span><span class="ans-val">${w.synonym}</span></div>` : ''}
-      </div>`
+    renderTripleB(area, w)
   } else {
-    promptLabel = '동의어'
-    prompt = `<div class="fc-syn-big">${w.synonym || w.word}</div>`
-    answerHtml = `
-      <div class="triple-answer">
-        <div class="ans-row"><span class="ans-label">단어</span><span class="ans-val en">${w.word}</span></div>
-        <div class="ans-row"><span class="ans-label">뜻</span><span class="ans-val">${w.meaning}</span></div>
-      </div>`
+    const oneSyn = pickOneSynonym(w)
+    if (!oneSyn) {
+      // No synonyms → fall back to B
+      renderTripleB(area, w)
+    } else {
+      renderTripleC(area, w, oneSyn)
+    }
   }
+}
+
+// A: 단어 → 뜻(자가평가) + 동의어(타이핑)
+function renderTripleA(area, w) {
+  const groups = parseSynonymGroups(w.synonym)
+  const flat = groups.flat()
+
+  const synInputsHtml = flat.map((item, i) => `
+    <div class="copy-item-wrap" style="margin-top:6px">
+      <div class="copy-chars" id="ta-chars-${i}">
+        ${item.split('').map((c, ci) => `<span class="copy-char">${c}</span>`).join('')}
+      </div>
+      <div class="copy-input-row">
+        <input type="text" class="syn-input ta-input" id="ta-input-${i}"
+          data-idx="${i}" data-target="${item.replace(/"/g,'&quot;')}"
+          placeholder="${item}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          ${i > 0 ? 'disabled' : ''} />
+        <span class="item-check" id="ta-check-${i}"></span>
+      </div>
+    </div>`).join('')
 
   area.innerHTML = `
-  <div class="flashcard-wrap">
-    <div class="triple-type-badge">${promptLabel} 보고 맞추기</div>
-    <div class="flashcard" id="fc">
-      <div class="fc-front">
-        ${prompt}
-        <div class="fc-hint">탭하여 답 확인</div>
-      </div>
-      <div class="fc-back" style="display:none">
-        ${answerHtml}
+  <div class="triple-wrap">
+    <div class="triple-type-badge">단어 → 뜻 + 동의어</div>
+    <div class="triple-prompt-card">
+      <div class="triple-prompt-label">단어</div>
+      <div class="fc-word">${w.word}</div>
+    </div>
+
+    <div class="triple-section">
+      <div class="triple-section-label">뜻 — 알고 있었나요?</div>
+      <div class="triple-meaning-hidden" id="meaning-reveal">
+        <button class="reveal-btn" id="btn-reveal-meaning">뜻 확인하기</button>
+        <div class="meaning-text" id="meaning-text" style="display:none">${w.meaning}</div>
       </div>
     </div>
+
+    ${flat.length > 0 ? `
+    <div class="triple-section" id="syn-section" style="display:none">
+      <div class="triple-section-label">동의어 타이핑 (총 ${flat.length}개)</div>
+      ${synInputsHtml}
+    </div>` : ''}
+
     <div class="rating-row" id="rating-row" style="display:none">
       <button class="rating-btn again"  data-q="again">몰랐음</button>
       <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
@@ -224,16 +251,160 @@ function renderTripleCard(area, w) {
     </div>
   </div>`
 
-  document.getElementById('fc').addEventListener('click', () => {
-    document.querySelector('.fc-front').style.display = 'none'
-    document.querySelector('.fc-back').style.display = 'flex'
-    document.getElementById('rating-row').style.display = 'grid'
+  document.getElementById('btn-reveal-meaning').addEventListener('click', () => {
+    document.getElementById('btn-reveal-meaning').style.display = 'none'
+    document.getElementById('meaning-text').style.display = 'block'
+    if (flat.length > 0) {
+      document.getElementById('syn-section').style.display = 'block'
+      document.getElementById('ta-input-0')?.focus()
+    } else {
+      document.getElementById('rating-row').style.display = 'grid'
+    }
   })
+
+  // Synonym typing
+  let cur = 0
+  document.querySelectorAll('.ta-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const i = parseInt(input.dataset.idx)
+      const target = input.dataset.target
+      updateCharFeedback(`ta-chars-${i}`, input.value, target)
+      if (matchesItem(input.value, target)) {
+        input.classList.add('copy-done'); input.disabled = true
+        document.getElementById(`ta-check-${i}`).textContent = '✅'
+        cur = i + 1
+        const next = document.getElementById(`ta-input-${cur}`)
+        if (next) { next.disabled = false; next.focus() }
+        else { document.getElementById('rating-row').style.display = 'grid' }
+      }
+    })
+  })
+
   document.getElementById('rating-row').addEventListener('click', e => {
     const btn = e.target.closest('.rating-btn')
     if (!btn) return
-    const quality = QUALITY[btn.dataset.q]
-    processResult(w, quality, quality >= 4 ? XP.flashcard_good : XP.flashcard_again, quality >= 3)
+    const q = QUALITY[btn.dataset.q]
+    processResult(w, q, q >= 4 ? XP.flashcard_good : XP.flashcard_again, q >= 3)
+  })
+}
+
+// B: 뜻 → 단어(타이핑) + 동의어(자가평가)
+function renderTripleB(area, w) {
+  area.innerHTML = `
+  <div class="triple-wrap">
+    <div class="triple-type-badge">뜻 → 단어 + 동의어</div>
+    <div class="triple-prompt-card">
+      <div class="triple-prompt-label">뜻</div>
+      <div class="fc-meaning">${w.meaning}</div>
+    </div>
+
+    <div class="triple-section">
+      <div class="triple-section-label">영단어 타이핑</div>
+      <div class="copy-chars" id="b-chars">
+        ${w.word.split('').map(c => `<span class="copy-char">${c}</span>`).join('')}
+      </div>
+      <div class="copy-input-wrap">
+        <input type="text" id="b-word-input" placeholder="${w.word}"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      </div>
+    </div>
+
+    <div class="triple-section" id="b-syn-section" style="display:none">
+      <div class="triple-section-label">동의어 — 알고 있었나요?</div>
+      <button class="reveal-btn" id="btn-reveal-syn">동의어 확인하기</button>
+      <div class="meaning-text" id="syn-reveal-text" style="display:none">${w.synonym || '(없음)'}</div>
+    </div>
+
+    <div class="rating-row" id="rating-row" style="display:none">
+      <button class="rating-btn again"  data-q="again">몰랐음</button>
+      <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
+      <button class="rating-btn good"   data-q="good">알았음</button>
+      <button class="rating-btn perfect" data-q="perfect">완벽</button>
+    </div>
+  </div>`
+
+  const input = document.getElementById('b-word-input')
+  input.focus()
+  input.addEventListener('input', () => {
+    updateCharFeedback('b-chars', input.value, w.word)
+    if (normalize(input.value) === normalize(w.word)) {
+      input.classList.add('copy-done'); input.disabled = true
+      document.getElementById('b-syn-section').style.display = 'block'
+    }
+  })
+
+  document.getElementById('btn-reveal-syn').addEventListener('click', () => {
+    document.getElementById('btn-reveal-syn').style.display = 'none'
+    document.getElementById('syn-reveal-text').style.display = 'block'
+    document.getElementById('rating-row').style.display = 'grid'
+  })
+
+  document.getElementById('rating-row').addEventListener('click', e => {
+    const btn = e.target.closest('.rating-btn')
+    if (!btn) return
+    const q = QUALITY[btn.dataset.q]
+    processResult(w, q, q >= 4 ? XP.flashcard_good : XP.flashcard_again, q >= 3)
+  })
+}
+
+// C: 동의어 1개 → 단어(타이핑) + 뜻(자가평가)
+function renderTripleC(area, w, oneSyn) {
+  area.innerHTML = `
+  <div class="triple-wrap">
+    <div class="triple-type-badge">동의어 → 단어 + 뜻</div>
+    <div class="triple-prompt-card">
+      <div class="triple-prompt-label">동의어</div>
+      <div class="fc-syn-big">${oneSyn}</div>
+    </div>
+
+    <div class="triple-section">
+      <div class="triple-section-label">영단어 타이핑</div>
+      <div class="copy-chars" id="c-chars">
+        ${w.word.split('').map(c => `<span class="copy-char">${c}</span>`).join('')}
+      </div>
+      <div class="copy-input-wrap">
+        <input type="text" id="c-word-input" placeholder="${w.word}"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      </div>
+    </div>
+
+    <div class="triple-section" id="c-meaning-section" style="display:none">
+      <div class="triple-section-label">뜻 — 알고 있었나요?</div>
+      <button class="reveal-btn" id="btn-reveal-c-meaning">뜻 확인하기</button>
+      <div class="meaning-text" id="c-meaning-text" style="display:none">${w.meaning}</div>
+      <div class="meaning-text" style="display:none;color:var(--accent)" id="c-syn-all-text">전체 동의어: ${w.synonym}</div>
+    </div>
+
+    <div class="rating-row" id="rating-row" style="display:none">
+      <button class="rating-btn again"  data-q="again">몰랐음</button>
+      <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
+      <button class="rating-btn good"   data-q="good">알았음</button>
+      <button class="rating-btn perfect" data-q="perfect">완벽</button>
+    </div>
+  </div>`
+
+  const input = document.getElementById('c-word-input')
+  input.focus()
+  input.addEventListener('input', () => {
+    updateCharFeedback('c-chars', input.value, w.word)
+    if (normalize(input.value) === normalize(w.word)) {
+      input.classList.add('copy-done'); input.disabled = true
+      document.getElementById('c-meaning-section').style.display = 'block'
+    }
+  })
+
+  document.getElementById('btn-reveal-c-meaning').addEventListener('click', () => {
+    document.getElementById('btn-reveal-c-meaning').style.display = 'none'
+    document.getElementById('c-meaning-text').style.display = 'block'
+    document.getElementById('c-syn-all-text').style.display = 'block'
+    document.getElementById('rating-row').style.display = 'grid'
+  })
+
+  document.getElementById('rating-row').addEventListener('click', e => {
+    const btn = e.target.closest('.rating-btn')
+    if (!btn) return
+    const q = QUALITY[btn.dataset.q]
+    processResult(w, q, q >= 4 ? XP.flashcard_good : XP.flashcard_again, q >= 3)
   })
 }
 

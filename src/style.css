@@ -425,6 +425,29 @@ html, body {
 .ans-val { font-size: 18px; font-weight: 700; line-height: 1.4; }
 .ans-val.en { font-size: 22px; color: var(--accent); }
 
+/* ── Triple Mode (redesigned) ──────────────────────────── */
+.triple-wrap { display: flex; flex-direction: column; gap: 12px; }
+.triple-prompt-card {
+  background: linear-gradient(135deg, #1e1040, #2d1b6e);
+  border-radius: var(--radius); padding: 24px;
+  text-align: center; border: 1px solid rgba(124,58,237,.3);
+}
+.triple-prompt-label { font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+.triple-section {
+  background: var(--bg2); border-radius: var(--radius);
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  border: 1px solid var(--bg3);
+}
+.triple-section-label { font-size: 12px; font-weight: 700; color: var(--text2); }
+.reveal-btn {
+  background: var(--bg3); border: 1px dashed var(--text2);
+  border-radius: 8px; padding: 10px; color: var(--text2);
+  cursor: pointer; font-size: 13px; width: 100%; text-align: center;
+  transition: border-color .15s, color .15s;
+}
+.reveal-btn:hover { border-color: var(--accent); color: var(--accent); }
+.meaning-text { font-size: 16px; font-weight: 600; line-height: 1.5; padding: 4px 0; }
+
 /* ── Copy Practice ─────────────────────────────────────── */
 .copy-wrap { display: flex; flex-direction: column; gap: 14px; }
 .copy-ref-card {
