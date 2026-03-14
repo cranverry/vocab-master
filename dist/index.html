@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#7c3aed" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="VocabMaster" />
+  <link rel="apple-touch-icon" href="/vocab-master/icons/icon.svg" />
+  <title>VocabMaster</title>
+  <script type="module" crossorigin src="/vocab-master/assets/index-DgkAY8_z.js"></script>
+  <link rel="stylesheet" crossorigin href="/vocab-master/assets/index-yn4IX_Vz.css">
+<link rel="manifest" href="/vocab-master/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/vocab-master/registerSW.js"></script></head>
+<body>
+  <div id="app">
+    <main id="view"></main>
+    <nav id="bottom-nav">
+      <button class="nav-btn active" data-route="home">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">홈</span>
+      </button>
+      <button class="nav-btn" data-route="chapters">
+        <span class="nav-icon">📚</span>
+        <span class="nav-label">챕터</span>
+      </button>
+      <button class="nav-btn" data-route="review">
+        <span class="nav-icon">🔄</span>
+        <span class="nav-label">복습</span>
+      </button>
+      <button class="nav-btn" data-route="stats">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">통계</span>
+      </button>
+    </nav>
+  </div>
+  <div id="toast-container"></div>
+</body>
+</html>
