@@ -1,5 +1,12 @@
 import './style.css'
 import { navigate } from './router.js'
+import { getChapters, saveChapter } from './modules/storage.js'
+import { DEFAULT_CHAPTERS } from './data/default-chapters.js'
+
+// Seed default chapters on first load
+if (getChapters().length === 0) {
+  DEFAULT_CHAPTERS.forEach(ch => saveChapter(ch))
+}
 
 // Bottom nav routing
 document.getElementById('bottom-nav').addEventListener('click', e => {
