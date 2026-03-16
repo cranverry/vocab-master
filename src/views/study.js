@@ -2,6 +2,7 @@ import { getChapter, getWordData, saveWordData, getUserStats, saveUserStats } fr
 import { sm2, isDue, QUALITY } from '../modules/srs.js'
 import { addXP, updateStreak, checkBadges, XP } from '../modules/gamification.js'
 import { parseSynonymGroups, matchesItem, normalize } from '../modules/synonymParser.js'
+import { checkMeaning } from '../modules/meaningParser.js'
 import { navigate } from '../router.js'
 import { showToast } from '../main.js'
 
@@ -164,14 +165,18 @@ function renderTypingMode(area, w) {
   let meaningCorrect = false
   let synResults = new Array(synFlat.length).fill(false)
 
-  function checkMeaning() {
+  function checkMeaningField() {
     const fb = document.getElementById('meaning-feedback')
-    meaningCorrect = normalize(meaningInp.value) === normalize(w.meaning)
+    const { correct, missing } = checkMeaning(meaningInp.value, w.meaning)
+    meaningCorrect = correct
     meaningInp.disabled = true
     document.getElementById('btn-check-meaning').style.display = 'none'
-    document.getElementById('meaning-st').textContent = meaningCorrect ? '✅' : '❌'
-    if (!meaningCorrect) {
-      fb.innerHTML = `<div class="field-wrong-hint">정답: <strong>${w.meaning}</strong></div>`
+    document.getElementById('meaning-st').textContent = correct ? '✅' : '❌'
+    if (!correct) {
+      fb.innerHTML = `<div class="field-wrong-hint">
+        빠진 항목: <strong>${missing.join(', ')}</strong><br>
+        <small>정답: ${w.meaning}</small>
+      </div>`
     }
     if (synFlat.length > 0) {
       document.getElementById('syn-section').style.display = 'block'
@@ -181,8 +186,8 @@ function renderTypingMode(area, w) {
     }
   }
 
-  document.getElementById('btn-check-meaning').addEventListener('click', checkMeaning)
-  meaningInp.addEventListener('keydown', e => { if (e.key === 'Enter') checkMeaning() })
+  document.getElementById('btn-check-meaning').addEventListener('click', checkMeaningField)
+  meaningInp.addEventListener('keydown', e => { if (e.key === 'Enter') checkMeaningField() })
 
   // Synonym inputs
   let synDone = 0
@@ -316,15 +321,16 @@ function renderTripleMode(area, w) {
   wordInp.addEventListener('keydown', e => { if (e.key === 'Enter') checkWord() })
 
   // ── Meaning input ──
-  function checkMeaning() {
+  function checkMeaningField2() {
     const inp = document.getElementById('meaning-inp2')
-    meaningCorrect = normalize(inp.value) === normalize(w.meaning)
+    const { correct, missing } = checkMeaning(inp.value, w.meaning)
+    meaningCorrect = correct
     inp.disabled = true
     document.getElementById('btn-check-meaning2').style.display = 'none'
-    document.getElementById('meaning-st2').textContent = meaningCorrect ? '✅' : '❌'
-    if (!meaningCorrect) {
+    document.getElementById('meaning-st2').textContent = correct ? '✅' : '❌'
+    if (!correct) {
       document.getElementById('meaning-feedback2').innerHTML =
-        `<div class="field-wrong-hint">정답: <strong>${w.meaning}</strong></div>`
+        `<div class="field-wrong-hint">빠진 항목: <strong>${missing.join(', ')}</strong><br><small>정답: ${w.meaning}</small></div>`
     }
     if (remainingSyns.length > 0) {
       document.getElementById('rem-section').style.display = 'block'
@@ -334,9 +340,9 @@ function renderTripleMode(area, w) {
     }
   }
 
-  document.getElementById('btn-check-meaning2').addEventListener('click', checkMeaning)
+  document.getElementById('btn-check-meaning2').addEventListener('click', checkMeaningField2)
   document.getElementById('meaning-inp2').addEventListener('keydown', e => {
-    if (e.key === 'Enter') checkMeaning()
+    if (e.key === 'Enter') checkMeaningField2()
   })
 
   // ── Remaining synonyms ──
