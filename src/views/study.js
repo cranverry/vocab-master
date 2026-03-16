@@ -13,7 +13,6 @@ export function renderStudy({ chapterId: cid, mode: m } = {}) {
   const ch = getChapter(cid)
   if (!ch) return `<div class="view"><p>챕터 없음</p></div>`
 
-  // Build queue
   if (m === 'srs') {
     queue = ch.words.filter(w => isDue(getWordData(cid, w.id)))
   } else {
@@ -46,7 +45,13 @@ export function renderStudy({ chapterId: cid, mode: m } = {}) {
 }
 
 function modeLabel(m) {
-  return { flashcard: '플래시카드', typing: '타이핑', srs: 'SRS 복습', triple: '3방향 테스트', copy: '쓰기 연습' }[m] || m
+  return {
+    flashcard: '플래시카드',
+    typing: '단어→뜻+동의어',
+    triple: '동의어→전체',
+    srs: 'SRS 복습',
+    copy: '쓰기 연습'
+  }[m] || m
 }
 
 export function setupStudy({ chapterId: cid, mode: m } = {}) {
@@ -54,28 +59,22 @@ export function setupStudy({ chapterId: cid, mode: m } = {}) {
   if (queue.length > 0) renderCard()
 }
 
-// ── Card Renderer ─────────────────────────────────────────
-
 function renderCard() {
   const area = document.getElementById('card-area')
   if (!area) return
   if (idx >= queue.length) { showSummary(); return }
-
   const w = queue[idx]
   updateProgressBar()
 
-  if (mode === 'typing') {
-    renderTypingCard(area, w)
-  } else if (mode === 'triple') {
-    renderTripleCard(area, w)
-  } else if (mode === 'copy') {
-    renderCopyCard(area, w)
-  } else {
-    renderFlashCard(area, w)
-  }
+  if (mode === 'typing') renderTypingMode(area, w)
+  else if (mode === 'triple') renderTripleMode(area, w)
+  else if (mode === 'copy') renderCopyCard(area, w)
+  else renderFlashCard(area, w)
 }
 
-// ── Flashcard ─────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
+// FLASHCARD
+// ────────────────────────────────────────────────────────────
 
 function renderFlashCard(area, w) {
   flipped = false
@@ -92,7 +91,7 @@ function renderFlashCard(area, w) {
       </div>
     </div>
     <div class="rating-row" id="rating-row" style="display:none">
-      <button class="rating-btn again"  data-q="again">다시<br><small>0xp</small></button>
+      <button class="rating-btn again"  data-q="again">다시<br><small>+1xp</small></button>
       <button class="rating-btn hard"   data-q="hard">어려움<br><small>+1xp</small></button>
       <button class="rating-btn good"   data-q="good">좋음<br><small>+5xp</small></button>
       <button class="rating-btn perfect" data-q="perfect">완벽<br><small>+5xp</small></button>
@@ -100,479 +99,310 @@ function renderFlashCard(area, w) {
   </div>`
 
   document.getElementById('fc').addEventListener('click', () => {
-    if (flipped) return
-    flipped = true
+    if (flipped) return; flipped = true
     document.querySelector('.fc-front').style.display = 'none'
     document.querySelector('.fc-back').style.display = 'flex'
-    document.getElementById('rating-row').style.display = 'flex'
-  })
-
-  document.getElementById('rating-row').addEventListener('click', e => {
-    const btn = e.target.closest('.rating-btn')
-    if (!btn) return
-    const q = btn.dataset.q
-    const quality = QUALITY[q]
-    const xpGain = quality >= 4 ? XP.flashcard_good : XP.flashcard_again
-    processResult(w, quality, xpGain, quality >= 3)
-  })
-}
-
-// ── Typing Card ───────────────────────────────────────────
-// Randomly picks one of two question types per card:
-//   T1: 뜻 보여주고 → 단어 타이핑 + 동의어 1개 타이핑
-//   T2: 동의어 1개 보여주고 → 단어 타이핑 + 뜻 자가평가
-
-function renderTypingCard(area, w) {
-  const oneSyn = pickOneSynonym(w)
-  // If no synonym, always use T1
-  const useT2 = oneSyn && Math.random() > 0.5
-  if (useT2) renderTypingT2(area, w, oneSyn)
-  else renderTypingT1(area, w, oneSyn)
-}
-
-// T1: 뜻 → 단어 타이핑 + 동의어 1개 타이핑
-function renderTypingT1(area, w, oneSyn) {
-  area.innerHTML = `
-  <div class="typing-wrap">
-    <div class="typing-prompt">
-      <div class="t-badge">뜻 → 단어 + 동의어</div>
-      <div class="typing-meaning">${w.meaning}</div>
-    </div>
-
-    <div class="typing-step" id="t1-step-word">
-      <div class="step-label">영단어 타이핑</div>
-      <div class="typing-input-wrap">
-        <input type="text" id="t1-word-input" placeholder="영단어..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
-        <button class="hint-btn" id="btn-hint">힌트</button>
-      </div>
-      <div class="hint-text" id="hint-text"></div>
-      <div class="typing-result" id="t1-word-result"></div>
-    </div>
-
-    ${oneSyn ? `
-    <div class="typing-step" id="t1-step-syn" style="display:none">
-      <div class="step-label">동의어 타이핑 (1개)</div>
-      <div class="typing-input-wrap">
-        <input type="text" id="t1-syn-input" placeholder="동의어..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
-      </div>
-      <div class="typing-result" id="t1-syn-result"></div>
-      <button class="btn-primary" id="btn-t1-check" style="margin-top:8px">확인</button>
-    </div>` : `
-    <button class="btn-primary" id="btn-t1-check-notsyn" style="display:none;margin-top:8px">다음</button>`}
-  </div>`
-
-  const wordInput = document.getElementById('t1-word-input')
-  wordInput.focus()
-  let hintLevel = 0
-
-  document.getElementById('btn-hint').addEventListener('click', () => {
-    hintLevel++
-    document.getElementById('hint-text').textContent =
-      w.word.split('').map((c, i) => i < hintLevel ? c : '_').join(' ')
-  })
-
-  function checkWord() {
-    const isCorrect = normalize(wordInput.value) === normalize(w.word)
-    const res = document.getElementById('t1-word-result')
-    if (isCorrect) {
-      res.innerHTML = `<div class="result-correct">✅ <strong>${w.word}</strong></div>`
-      wordInput.disabled = true
-      if (oneSyn) {
-        document.getElementById('t1-step-syn').style.display = 'block'
-        document.getElementById('t1-syn-input').focus()
-      } else {
-        const btn = document.getElementById('btn-t1-check-notsyn')
-        if (btn) { btn.style.display = 'block' }
-        else { setTimeout(() => processResult(w, QUALITY.good, hintLevel === 0 ? XP.typing_correct : XP.typing_hint, true), 700) }
-      }
-    } else {
-      res.innerHTML = `<div class="result-wrong">❌ 정답: <strong>${w.word}</strong></div>`
-      wordInput.disabled = true
-      if (oneSyn) {
-        document.getElementById('t1-step-syn').style.display = 'block'
-        document.getElementById('t1-syn-input').focus()
-      }
-      // Mark as wrong for SRS regardless
-      if (!oneSyn) setTimeout(() => processResult(w, QUALITY.again, XP.typing_wrong, false), 800)
-    }
-  }
-
-  wordInput.addEventListener('keydown', e => { if (e.key === 'Enter') checkWord() })
-  document.getElementById('btn-hint')?.addEventListener('click', () => {})
-
-  // Auto-check on correct match while typing
-  wordInput.addEventListener('input', () => {
-    if (normalize(wordInput.value) === normalize(w.word)) checkWord()
-  })
-
-  if (oneSyn) {
-    const synInput = document.getElementById('t1-syn-input')
-    let wordCorrect = false
-
-    // Re-evaluate after word step
-    const origCheck = checkWord
-    wordInput.addEventListener('input', () => {
-      wordCorrect = normalize(wordInput.value) === normalize(w.word)
-    })
-
-    document.getElementById('btn-t1-check').addEventListener('click', () => {
-      const synCorrect = matchesItem(synInput.value, oneSyn)
-      const res = document.getElementById('t1-syn-result')
-      if (synCorrect) {
-        res.innerHTML = `<div class="result-correct">✅ <strong>${oneSyn}</strong></div>`
-      } else {
-        res.innerHTML = `<div class="result-wrong">❌ 정답: <strong>${oneSyn}</strong></div>`
-      }
-      synInput.disabled = true
-      document.getElementById('btn-t1-check').disabled = true
-      const wordWasCorrect = normalize(document.getElementById('t1-word-result').textContent).includes(w.word.toLowerCase()) &&
-        !document.getElementById('t1-word-result').innerHTML.includes('result-wrong')
-      const bothCorrect = wordWasCorrect && synCorrect
-      const xp = bothCorrect ? (hintLevel === 0 ? XP.typing_correct : XP.typing_hint) : XP.typing_wrong
-      setTimeout(() => processResult(w, bothCorrect ? QUALITY.good : QUALITY.again, xp, bothCorrect), 900)
-    })
-
-    synInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') document.getElementById('btn-t1-check').click()
-    })
-  }
-
-  document.getElementById('btn-t1-check-notsyn')?.addEventListener('click', () => {
-    processResult(w, QUALITY.good, hintLevel === 0 ? XP.typing_correct : XP.typing_hint, true)
-  })
-}
-
-// T2: 동의어 1개 → 단어 타이핑 + 뜻 자가평가
-function renderTypingT2(area, w, oneSyn) {
-  area.innerHTML = `
-  <div class="typing-wrap">
-    <div class="typing-prompt">
-      <div class="t-badge">동의어 → 단어 + 뜻</div>
-      <div class="typing-meaning">${oneSyn}</div>
-    </div>
-
-    <div class="typing-step">
-      <div class="step-label">영단어 타이핑</div>
-      <div class="typing-input-wrap">
-        <input type="text" id="t2-word-input" placeholder="영단어..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
-        <button class="hint-btn" id="btn-hint">힌트</button>
-      </div>
-      <div class="hint-text" id="hint-text"></div>
-      <div class="typing-result" id="t2-word-result"></div>
-    </div>
-
-    <div class="typing-step" id="t2-step-meaning" style="display:none">
-      <div class="step-label">뜻 — 알고 있었나요?</div>
-      <button class="reveal-btn" id="btn-reveal-meaning">뜻 확인하기</button>
-      <div class="meaning-text" id="t2-meaning-text" style="display:none">${w.meaning}</div>
-    </div>
-
-    <div class="rating-row" id="rating-row" style="display:none">
-      <button class="rating-btn again"  data-q="again">몰랐음</button>
-      <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
-      <button class="rating-btn good"   data-q="good">알았음</button>
-      <button class="rating-btn perfect" data-q="perfect">완벽</button>
-    </div>
-  </div>`
-
-  const input = document.getElementById('t2-word-input')
-  input.focus()
-  let hintLevel = 0
-  let wordCorrect = false
-
-  document.getElementById('btn-hint').addEventListener('click', () => {
-    hintLevel++
-    document.getElementById('hint-text').textContent =
-      w.word.split('').map((c, i) => i < hintLevel ? c : '_').join(' ')
-  })
-
-  function checkWord() {
-    wordCorrect = normalize(input.value) === normalize(w.word)
-    const res = document.getElementById('t2-word-result')
-    if (wordCorrect) {
-      res.innerHTML = `<div class="result-correct">✅ <strong>${w.word}</strong></div>`
-    } else {
-      res.innerHTML = `<div class="result-wrong">❌ 정답: <strong>${w.word}</strong></div>`
-    }
-    input.disabled = true
-    document.getElementById('t2-step-meaning').style.display = 'block'
-  }
-
-  input.addEventListener('input', () => {
-    if (normalize(input.value) === normalize(w.word)) checkWord()
-  })
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') checkWord() })
-
-  document.getElementById('btn-reveal-meaning').addEventListener('click', () => {
-    document.getElementById('btn-reveal-meaning').style.display = 'none'
-    document.getElementById('t2-meaning-text').style.display = 'block'
     document.getElementById('rating-row').style.display = 'grid'
   })
-
   document.getElementById('rating-row').addEventListener('click', e => {
     const btn = e.target.closest('.rating-btn')
     if (!btn) return
     const q = QUALITY[btn.dataset.q]
-    const finalCorrect = wordCorrect && q >= 3
-    processResult(w, wordCorrect ? q : QUALITY.again,
-      finalCorrect ? (hintLevel === 0 ? XP.typing_correct : XP.typing_hint) : XP.typing_wrong,
-      finalCorrect)
+    processResult(w, q, q >= 4 ? XP.flashcard_good : XP.flashcard_again, q >= 3)
   })
 }
 
-// ── Triple Mode (3-direction) ─────────────────────────────
-//
-// A. 단어 → 뜻+동의어   : 단어 보여줌 → 뜻 자가평가 + 동의어 타이핑
-// B. 뜻  → 단어+동의어   : 뜻  보여줌 → 단어 타이핑 + 동의어 자가평가
-// C. 동의어 → 단어+뜻    : 동의어 1개 보여줌 → 단어 타이핑 + 뜻 자가평가
+// ────────────────────────────────────────────────────────────
+// TYPING MODE 1: 영단어 → 뜻 + 동의어 전부 입력
+// ────────────────────────────────────────────────────────────
 
-const TRIPLE_TYPES = ['word2meaning', 'meaning2word', 'synonym2both']
+function renderTypingMode(area, w) {
+  const synFlat = parseSynonymGroups(w.synonym).flat()
 
-function pickOneSynonym(w) {
-  const groups = parseSynonymGroups(w.synonym)
-  const flat = groups.flat()
-  if (!flat.length) return null
-  return flat[Math.floor(Math.random() * flat.length)]
-}
+  const synFieldsHtml = synFlat.map((syn, i) => `
+    <div class="test-field" id="tf-${i}">
+      <input type="text" class="test-input" id="syn-inp-${i}"
+        data-idx="${i}" data-target="${syn.replace(/"/g,'&quot;')}"
+        placeholder="동의어 ${i+1}..."
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        ${i > 0 ? 'disabled' : ''} />
+      <span class="field-status" id="syn-st-${i}"></span>
+    </div>`).join('')
 
-function renderTripleCard(area, w) {
-  const qType = TRIPLE_TYPES[idx % 3]
-  // Always pick ONE synonym for this card
-  const oneSyn = pickOneSynonym(w)
-
-  if (qType === 'word2meaning') {
-    renderTripleA(area, w, oneSyn)
-  } else if (qType === 'meaning2word') {
-    renderTripleB(area, w, oneSyn)
-  } else {
-    if (!oneSyn) renderTripleB(area, w, null)
-    else renderTripleC(area, w, oneSyn)
-  }
-}
-
-// A: 단어 → 뜻(자가평가) + 동의어 1개(타이핑)
-function renderTripleA(area, w, oneSyn) {
   area.innerHTML = `
-  <div class="triple-wrap">
-    <div class="triple-type-badge">단어 → 뜻 + 동의어</div>
-    <div class="triple-prompt-card">
-      <div class="triple-prompt-label">단어</div>
-      <div class="fc-word">${w.word}</div>
+  <div class="test-wrap">
+    <div class="test-prompt-card">
+      <div class="test-prompt-label">영단어</div>
+      <div class="test-prompt-word">${w.word}</div>
     </div>
 
-    <div class="triple-section">
-      <div class="triple-section-label">뜻 — 알고 있었나요?</div>
-      <button class="reveal-btn" id="btn-reveal-meaning">뜻 확인하기</button>
-      <div class="meaning-text" id="meaning-text" style="display:none">${w.meaning}</div>
+    <div class="test-section">
+      <div class="test-section-label">뜻 입력</div>
+      <div class="test-field">
+        <input type="text" id="meaning-inp"
+          placeholder="뜻을 입력하세요..."
+          autocomplete="off" spellcheck="false" />
+        <span class="field-status" id="meaning-st"></span>
+      </div>
+      <button class="btn-check-meaning" id="btn-check-meaning">확인</button>
+      <div id="meaning-feedback"></div>
     </div>
 
-    ${oneSyn ? `
-    <div class="triple-section" id="syn-section" style="display:none">
-      <div class="triple-section-label">동의어 타이핑 (1개)</div>
-      <div class="copy-chars" id="ta-chars">
-        ${oneSyn.split('').map(c => `<span class="copy-char">${c}</span>`).join('')}
-      </div>
-      <div class="copy-input-wrap">
-        <input type="text" id="ta-input" placeholder="${oneSyn}"
-          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
-      </div>
-    </div>` : ''}
+    <div class="test-section" id="syn-section" style="display:none">
+      <div class="test-section-label">동의어 전부 입력 (${synFlat.length}개)</div>
+      ${synFieldsHtml}
+    </div>
 
-    <div class="rating-row" id="rating-row" style="display:none">
-      <button class="rating-btn again"  data-q="again">몰랐음</button>
-      <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
-      <button class="rating-btn good"   data-q="good">알았음</button>
-      <button class="rating-btn perfect" data-q="perfect">완벽</button>
+    <div id="test-done-area" style="display:none">
+      <button class="btn-primary" id="btn-next">다음 →</button>
     </div>
   </div>`
 
-  document.getElementById('btn-reveal-meaning').addEventListener('click', () => {
-    document.getElementById('btn-reveal-meaning').style.display = 'none'
-    document.getElementById('meaning-text').style.display = 'block'
-    if (oneSyn) {
+  const meaningInp = document.getElementById('meaning-inp')
+  meaningInp.focus()
+
+  let meaningCorrect = false
+  let synResults = new Array(synFlat.length).fill(false)
+
+  function checkMeaning() {
+    const fb = document.getElementById('meaning-feedback')
+    meaningCorrect = normalize(meaningInp.value) === normalize(w.meaning)
+    meaningInp.disabled = true
+    document.getElementById('btn-check-meaning').style.display = 'none'
+    document.getElementById('meaning-st').textContent = meaningCorrect ? '✅' : '❌'
+    if (!meaningCorrect) {
+      fb.innerHTML = `<div class="field-wrong-hint">정답: <strong>${w.meaning}</strong></div>`
+    }
+    if (synFlat.length > 0) {
       document.getElementById('syn-section').style.display = 'block'
-      document.getElementById('ta-input')?.focus()
+      document.getElementById('syn-inp-0').focus()
     } else {
-      document.getElementById('rating-row').style.display = 'grid'
+      finishTest()
     }
-  })
-
-  if (oneSyn) {
-    document.getElementById('ta-input').addEventListener('input', e => {
-      updateCharFeedback('ta-chars', e.target.value, oneSyn)
-      if (matchesItem(e.target.value, oneSyn)) {
-        e.target.classList.add('copy-done'); e.target.disabled = true
-        document.getElementById('rating-row').style.display = 'grid'
-      }
-    })
   }
 
-  document.getElementById('rating-row').addEventListener('click', e => {
-    const btn = e.target.closest('.rating-btn')
-    if (!btn) return
-    const q = QUALITY[btn.dataset.q]
-    processResult(w, q, q >= 4 ? XP.flashcard_good : XP.flashcard_again, q >= 3)
+  document.getElementById('btn-check-meaning').addEventListener('click', checkMeaning)
+  meaningInp.addEventListener('keydown', e => { if (e.key === 'Enter') checkMeaning() })
+
+  // Synonym inputs
+  let synDone = 0
+  document.querySelectorAll('.test-input').forEach(input => {
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') checkSyn(input) })
+    input.addEventListener('input', () => {
+      if (matchesItem(input.value, input.dataset.target)) checkSyn(input)
+    })
   })
+
+  function checkSyn(input) {
+    const i = parseInt(input.dataset.idx)
+    const isCorrect = matchesItem(input.value, input.dataset.target)
+    synResults[i] = isCorrect
+    input.disabled = true
+    const st = document.getElementById(`syn-st-${i}`)
+    if (isCorrect) {
+      st.textContent = '✅'
+      input.classList.add('inp-correct')
+    } else {
+      st.innerHTML = `❌ <small>${input.dataset.target}</small>`
+      input.classList.add('inp-wrong')
+    }
+    synDone++
+    const next = document.getElementById(`syn-inp-${i + 1}`)
+    if (next) { next.disabled = false; next.focus() }
+    else finishTest()
+  }
+
+  function finishTest() {
+    const allSynCorrect = synResults.every(Boolean)
+    const allCorrect = meaningCorrect && (synFlat.length === 0 || allSynCorrect)
+    document.getElementById('test-done-area').style.display = 'block'
+    document.getElementById('btn-next').textContent =
+      allCorrect ? '✅ 정답! 다음 →' : '❌ 오답 — 다음 →'
+    document.getElementById('btn-next').addEventListener('click', () => {
+      const q = allCorrect ? QUALITY.good : QUALITY.again
+      processResult(w, q, allCorrect ? XP.typing_correct : XP.typing_wrong, allCorrect)
+    })
+  }
 }
 
-// B: 뜻 → 단어(타이핑) + 동의어 1개(자가평가)
-function renderTripleB(area, w, oneSyn) {
+// ────────────────────────────────────────────────────────────
+// TRIPLE MODE: 동의어 1개 → 영단어 + 뜻 + 나머지 동의어 전부
+// ────────────────────────────────────────────────────────────
+
+function renderTripleMode(area, w) {
+  const allSyns = parseSynonymGroups(w.synonym).flat()
+  const promptSyn = allSyns.length > 0
+    ? allSyns[Math.floor(Math.random() * allSyns.length)]
+    : null
+  const remainingSyns = allSyns.filter(s => s !== promptSyn)
+
+  if (!promptSyn) {
+    // 동의어 없으면 typing mode로 대체
+    renderTypingMode(area, w)
+    return
+  }
+
+  const remFieldsHtml = remainingSyns.map((syn, i) => `
+    <div class="test-field" id="rtf-${i}">
+      <input type="text" class="test-input rem-input" id="rem-inp-${i}"
+        data-idx="${i}" data-target="${syn.replace(/"/g,'&quot;')}"
+        placeholder="동의어 ${i+1}..."
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        ${i > 0 ? 'disabled' : ''} />
+      <span class="field-status" id="rem-st-${i}"></span>
+    </div>`).join('')
+
   area.innerHTML = `
-  <div class="triple-wrap">
-    <div class="triple-type-badge">뜻 → 단어 + 동의어</div>
-    <div class="triple-prompt-card">
-      <div class="triple-prompt-label">뜻</div>
-      <div class="fc-meaning">${w.meaning}</div>
+  <div class="test-wrap">
+    <div class="test-prompt-card">
+      <div class="test-prompt-label">동의어</div>
+      <div class="test-prompt-word">${promptSyn}</div>
     </div>
 
-    <div class="triple-section">
-      <div class="triple-section-label">영단어 타이핑</div>
-      <div class="copy-chars" id="b-chars">
-        ${w.word.split('').map(c => `<span class="copy-char">${c}</span>`).join('')}
-      </div>
-      <div class="copy-input-wrap">
-        <input type="text" id="b-word-input" placeholder="${w.word}"
-          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+    <div class="test-section">
+      <div class="test-section-label">영단어 입력</div>
+      <div class="test-field">
+        <input type="text" id="word-inp"
+          placeholder="영단어..."
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+        <span class="field-status" id="word-st"></span>
       </div>
     </div>
 
-    ${oneSyn ? `
-    <div class="triple-section" id="b-syn-section" style="display:none">
-      <div class="triple-section-label">동의어 (1개) — 알고 있었나요?</div>
-      <button class="reveal-btn" id="btn-reveal-syn">동의어 확인하기</button>
-      <div class="meaning-text" id="syn-reveal-text" style="display:none">${oneSyn}</div>
+    <div class="test-section" id="meaning-section" style="display:none">
+      <div class="test-section-label">뜻 입력</div>
+      <div class="test-field">
+        <input type="text" id="meaning-inp2"
+          placeholder="뜻을 입력하세요..."
+          autocomplete="off" spellcheck="false" />
+        <span class="field-status" id="meaning-st2"></span>
+      </div>
+      <button class="btn-check-meaning" id="btn-check-meaning2">확인</button>
+      <div id="meaning-feedback2"></div>
+    </div>
+
+    ${remainingSyns.length > 0 ? `
+    <div class="test-section" id="rem-section" style="display:none">
+      <div class="test-section-label">나머지 동의어 전부 입력 (${remainingSyns.length}개)</div>
+      ${remFieldsHtml}
     </div>` : ''}
 
-    <div class="rating-row" id="rating-row" style="display:none">
-      <button class="rating-btn again"  data-q="again">몰랐음</button>
-      <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
-      <button class="rating-btn good"   data-q="good">알았음</button>
-      <button class="rating-btn perfect" data-q="perfect">완벽</button>
+    <div id="test-done-area" style="display:none">
+      <button class="btn-primary" id="btn-next">다음 →</button>
     </div>
   </div>`
 
-  const input = document.getElementById('b-word-input')
-  input.focus()
-  input.addEventListener('input', () => {
-    updateCharFeedback('b-chars', input.value, w.word)
-    if (normalize(input.value) === normalize(w.word)) {
-      input.classList.add('copy-done'); input.disabled = true
-      if (oneSyn) document.getElementById('b-syn-section').style.display = 'block'
-      else document.getElementById('rating-row').style.display = 'grid'
-    }
-  })
+  let wordCorrect = false, meaningCorrect = false
+  let remResults = new Array(remainingSyns.length).fill(false)
 
-  if (oneSyn) {
-    document.getElementById('btn-reveal-syn').addEventListener('click', () => {
-      document.getElementById('btn-reveal-syn').style.display = 'none'
-      document.getElementById('syn-reveal-text').style.display = 'block'
-      document.getElementById('rating-row').style.display = 'grid'
-    })
+  // ── Word input ──
+  const wordInp = document.getElementById('word-inp')
+  wordInp.focus()
+
+  function checkWord() {
+    wordCorrect = normalize(wordInp.value) === normalize(w.word)
+    wordInp.disabled = true
+    document.getElementById('word-st').textContent = wordCorrect ? '✅' : `❌`
+    if (!wordCorrect) {
+      document.getElementById('word-st').innerHTML = `❌ <small>${w.word}</small>`
+    }
+    document.getElementById('meaning-section').style.display = 'block'
+    document.getElementById('meaning-inp2').focus()
   }
 
-  document.getElementById('rating-row').addEventListener('click', e => {
-    const btn = e.target.closest('.rating-btn')
-    if (!btn) return
-    const q = QUALITY[btn.dataset.q]
-    processResult(w, q, q >= 4 ? XP.flashcard_good : XP.flashcard_again, q >= 3)
+  wordInp.addEventListener('input', () => {
+    if (normalize(wordInp.value) === normalize(w.word)) checkWord()
   })
-}
+  wordInp.addEventListener('keydown', e => { if (e.key === 'Enter') checkWord() })
 
-// C: 동의어 1개 → 단어(타이핑) + 뜻(자가평가)
-function renderTripleC(area, w, oneSyn) {
-  area.innerHTML = `
-  <div class="triple-wrap">
-    <div class="triple-type-badge">동의어 → 단어 + 뜻</div>
-    <div class="triple-prompt-card">
-      <div class="triple-prompt-label">동의어</div>
-      <div class="fc-syn-big">${oneSyn}</div>
-    </div>
-
-    <div class="triple-section">
-      <div class="triple-section-label">영단어 타이핑</div>
-      <div class="copy-chars" id="c-chars">
-        ${w.word.split('').map(c => `<span class="copy-char">${c}</span>`).join('')}
-      </div>
-      <div class="copy-input-wrap">
-        <input type="text" id="c-word-input" placeholder="${w.word}"
-          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
-      </div>
-    </div>
-
-    <div class="triple-section" id="c-meaning-section" style="display:none">
-      <div class="triple-section-label">뜻 — 알고 있었나요?</div>
-      <button class="reveal-btn" id="btn-reveal-c-meaning">뜻 확인하기</button>
-      <div class="meaning-text" id="c-meaning-text" style="display:none">${w.meaning}</div>
-    </div>
-
-    <div class="rating-row" id="rating-row" style="display:none">
-      <button class="rating-btn again"  data-q="again">몰랐음</button>
-      <button class="rating-btn hard"   data-q="hard">어렴풋이</button>
-      <button class="rating-btn good"   data-q="good">알았음</button>
-      <button class="rating-btn perfect" data-q="perfect">완벽</button>
-    </div>
-  </div>`
-
-  const input = document.getElementById('c-word-input')
-  input.focus()
-  input.addEventListener('input', () => {
-    updateCharFeedback('c-chars', input.value, w.word)
-    if (normalize(input.value) === normalize(w.word)) {
-      input.classList.add('copy-done'); input.disabled = true
-      document.getElementById('c-meaning-section').style.display = 'block'
+  // ── Meaning input ──
+  function checkMeaning() {
+    const inp = document.getElementById('meaning-inp2')
+    meaningCorrect = normalize(inp.value) === normalize(w.meaning)
+    inp.disabled = true
+    document.getElementById('btn-check-meaning2').style.display = 'none'
+    document.getElementById('meaning-st2').textContent = meaningCorrect ? '✅' : '❌'
+    if (!meaningCorrect) {
+      document.getElementById('meaning-feedback2').innerHTML =
+        `<div class="field-wrong-hint">정답: <strong>${w.meaning}</strong></div>`
     }
+    if (remainingSyns.length > 0) {
+      document.getElementById('rem-section').style.display = 'block'
+      document.getElementById('rem-inp-0').focus()
+    } else {
+      finishTest()
+    }
+  }
+
+  document.getElementById('btn-check-meaning2').addEventListener('click', checkMeaning)
+  document.getElementById('meaning-inp2').addEventListener('keydown', e => {
+    if (e.key === 'Enter') checkMeaning()
   })
 
-  document.getElementById('btn-reveal-c-meaning').addEventListener('click', () => {
-    document.getElementById('btn-reveal-c-meaning').style.display = 'none'
-    document.getElementById('c-meaning-text').style.display = 'block'
-    document.getElementById('c-syn-all-text').style.display = 'block'
-    document.getElementById('rating-row').style.display = 'grid'
+  // ── Remaining synonyms ──
+  let remDone = 0
+  document.querySelectorAll('.rem-input').forEach(input => {
+    input.addEventListener('input', () => {
+      if (matchesItem(input.value, input.dataset.target)) checkRem(input)
+    })
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') checkRem(input) })
   })
 
-  document.getElementById('rating-row').addEventListener('click', e => {
-    const btn = e.target.closest('.rating-btn')
-    if (!btn) return
-    const q = QUALITY[btn.dataset.q]
-    processResult(w, q, q >= 4 ? XP.flashcard_good : XP.flashcard_again, q >= 3)
-  })
+  function checkRem(input) {
+    const i = parseInt(input.dataset.idx)
+    const isCorrect = matchesItem(input.value, input.dataset.target)
+    remResults[i] = isCorrect
+    input.disabled = true
+    const st = document.getElementById(`rem-st-${i}`)
+    if (isCorrect) {
+      st.textContent = '✅'; input.classList.add('inp-correct')
+    } else {
+      st.innerHTML = `❌ <small>${input.dataset.target}</small>`
+      input.classList.add('inp-wrong')
+    }
+    remDone++
+    const next = document.getElementById(`rem-inp-${i + 1}`)
+    if (next) { next.disabled = false; next.focus() }
+    else finishTest()
+  }
+
+  function finishTest() {
+    const allCorrect = wordCorrect && meaningCorrect &&
+      (remainingSyns.length === 0 || remResults.every(Boolean))
+    document.getElementById('test-done-area').style.display = 'block'
+    document.getElementById('btn-next').textContent =
+      allCorrect ? '✅ 정답! 다음 →' : '❌ 오답 — 다음 →'
+    document.getElementById('btn-next').addEventListener('click', () => {
+      const q = allCorrect ? QUALITY.good : QUALITY.again
+      processResult(w, q, allCorrect ? XP.typing_correct : XP.typing_wrong, allCorrect)
+    })
+  }
 }
 
-// ── Copy Practice Mode ────────────────────────────────────
+// ────────────────────────────────────────────────────────────
+// COPY PRACTICE: 보면서 단어 + 동의어 순차 타이핑
+// ────────────────────────────────────────────────────────────
 
 function renderCopyCard(area, w) {
-  // groups: Array<Array<string>>  e.g. [["promise","contract"], ["reserve","book"]]
   const groups = parseSynonymGroups(w.synonym)
-
-  // Flatten to a sequential list of items with group/item indices
-  // items: [{groupIdx, itemIdx, target, inputId, charsId}]
   const items = []
   groups.forEach((group, gi) => {
     group.forEach((item, ii) => {
-      items.push({
-        groupIdx: gi,
-        itemIdx: ii,
-        target: item,
-        inputId: `syn-input-${gi}-${ii}`,
-        charsId: `syn-chars-${gi}-${ii}`
-      })
+      items.push({ groupIdx: gi, itemIdx: ii, target: item,
+        inputId: `syn-input-${gi}-${ii}`, charsId: `syn-chars-${gi}-${ii}` })
     })
   })
-  const totalItems = items.length
 
-  // Build synonym inputs HTML
-  const synStepHtml = totalItems > 0 ? `
+  const synStepHtml = items.length > 0 ? `
     <div class="copy-step copy-step-syn" id="copy-step-syn" style="display:none">
-      <div class="copy-step-label">Step 2 — 동의어 타이핑 (총 ${totalItems}개)</div>
+      <div class="copy-step-label">Step 2 — 동의어 타이핑 (총 ${items.length}개)</div>
       ${groups.map((group, gi) => `
         <div class="copy-syn-group">
           ${groups.length > 1 ? `<div class="copy-group-label">그룹 ${gi + 1}</div>` : ''}
           ${group.map((item, ii) => `
             <div class="copy-item-wrap" id="item-wrap-${gi}-${ii}">
               <div class="copy-chars" id="syn-chars-${gi}-${ii}">
-                ${item.split('').map((c, ci) =>
-                  `<span class="copy-char" data-idx="${ci}">${c}</span>`
-                ).join('')}
+                ${item.split('').map(c => `<span class="copy-char">${c}</span>`).join('')}
               </div>
               <div class="copy-input-row">
                 <input type="text" class="syn-input"
@@ -590,47 +420,34 @@ function renderCopyCard(area, w) {
   area.innerHTML = `
   <div class="copy-wrap">
     <div class="copy-ref-card">
-      <div class="copy-ref-row">
-        <span class="copy-ref-label">단어</span>
-        <span class="copy-ref-val en">${w.word}</span>
-      </div>
-      <div class="copy-ref-row">
-        <span class="copy-ref-label">뜻</span>
-        <span class="copy-ref-val">${w.meaning}</span>
-      </div>
-      ${totalItems > 0 ? `<div class="copy-ref-row">
-        <span class="copy-ref-label">동의어</span>
-        <span class="copy-ref-val">${w.synonym}</span>
-      </div>` : ''}
+      <div class="copy-ref-row"><span class="copy-ref-label">단어</span><span class="copy-ref-val en">${w.word}</span></div>
+      <div class="copy-ref-row"><span class="copy-ref-label">뜻</span><span class="copy-ref-val">${w.meaning}</span></div>
+      ${items.length > 0 ? `<div class="copy-ref-row"><span class="copy-ref-label">동의어</span><span class="copy-ref-val">${w.synonym}</span></div>` : ''}
     </div>
-
     <div class="copy-step" id="copy-step-word">
       <div class="copy-step-label">Step 1 — 영단어 타이핑</div>
       <div class="copy-chars" id="word-chars">
-        ${w.word.split('').map((c, i) => `<span class="copy-char" data-idx="${i}">${c}</span>`).join('')}
+        ${w.word.split('').map(c => `<span class="copy-char">${c}</span>`).join('')}
       </div>
       <div class="copy-input-wrap">
         <input type="text" id="word-input" placeholder="${w.word}"
           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
       </div>
     </div>
-
     ${synStepHtml}
   </div>`
 
-  // ── Step 1: Word ──
   const wordInput = document.getElementById('word-input')
   wordInput.focus()
 
   wordInput.addEventListener('input', () => {
     updateCharFeedback('word-chars', wordInput.value, w.word)
     if (normalize(wordInput.value) === normalize(w.word)) {
-      wordInput.classList.add('copy-done')
-      wordInput.disabled = true
-      if (totalItems > 0) {
+      wordInput.classList.add('copy-done'); wordInput.disabled = true
+      if (items.length > 0) {
         setTimeout(() => {
           document.getElementById('copy-step-syn').style.display = 'block'
-          activateSynItem(0)
+          activateCopyItem(0)
         }, 400)
       } else {
         setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 600)
@@ -638,10 +455,8 @@ function renderCopyCard(area, w) {
     }
   })
 
-  // ── Step 2: Individual synonym items ──
   let currentItemIdx = 0
-
-  function activateSynItem(idx) {
+  function activateCopyItem(idx) {
     if (idx >= items.length) {
       setTimeout(() => processResult(w, QUALITY.good, XP.typing_correct, true), 700)
       return
@@ -653,25 +468,16 @@ function renderCopyCard(area, w) {
 
   document.querySelectorAll('.syn-input').forEach(input => {
     input.addEventListener('input', () => {
-      const gi = parseInt(input.dataset.gi)
-      const ii = parseInt(input.dataset.ii)
+      const gi = parseInt(input.dataset.gi), ii = parseInt(input.dataset.ii)
       const flatIdx = items.findIndex(it => it.groupIdx === gi && it.itemIdx === ii)
       const { target, charsId } = items[flatIdx]
-
       updateCharFeedback(charsId, input.value, target)
-
       if (matchesItem(input.value, target)) {
-        input.classList.add('copy-done')
-        input.disabled = true
-        const check = document.getElementById(`item-check-${gi}-${ii}`)
-        if (check) check.textContent = '✅'
+        input.classList.add('copy-done'); input.disabled = true
+        document.getElementById(`item-check-${gi}-${ii}`).textContent = '✅'
         currentItemIdx = flatIdx + 1
-        activateSynItem(currentItemIdx)
+        activateCopyItem(currentItemIdx)
       }
-    })
-
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !input.disabled) input.dispatchEvent(new Event('input'))
     })
   })
 }
@@ -680,23 +486,20 @@ function updateCharFeedback(charsId, val, target) {
   const chars = document.querySelectorAll(`#${charsId} .copy-char`)
   chars.forEach((span, i) => {
     span.classList.remove('correct', 'wrong', 'pending')
-    if (i < val.length) {
-      span.classList.add(val[i].toLowerCase() === target[i]?.toLowerCase() ? 'correct' : 'wrong')
-    } else {
-      span.classList.add('pending')
-    }
+    if (i < val.length) span.classList.add(val[i].toLowerCase() === target[i]?.toLowerCase() ? 'correct' : 'wrong')
+    else span.classList.add('pending')
   })
 }
 
-// ── Process Result ────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
+// PROCESS RESULT
+// ────────────────────────────────────────────────────────────
 
 function processResult(word, quality, xpGain, isCorrect) {
-  // Update SRS
   const prev = getWordData(chapterId, word.id)
   const next = sm2(quality, prev)
   saveWordData(chapterId, word.id, next)
 
-  // Update stats
   let stats = getUserStats()
   stats = updateStreak(stats)
   stats = addXP(stats, xpGain)
@@ -706,7 +509,7 @@ function processResult(word, quality, xpGain, isCorrect) {
   saveUserStats(s2)
 
   if (xpGain > 0) showXPPopup(xpGain)
-  earned.forEach(b => showToast(`🏅 뱃지 획득: ${b.icon} ${b.name}`))
+  earned.forEach(b => showToast(`🏅 뱃지: ${b.icon} ${b.name}`))
 
   sessionTotal++
   if (isCorrect) sessionCorrect++
@@ -730,8 +533,6 @@ function updateProgressBar() {
   if (txt) txt.textContent = `${idx + 1}/${queue.length}`
 }
 
-// ── Summary ───────────────────────────────────────────────
-
 function showSummary() {
   const pct = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0
   const area = document.getElementById('card-area')
@@ -746,9 +547,6 @@ function showSummary() {
       <button class="btn-secondary" id="btn-home">홈으로</button>
     </div>
   </div>`
-
-  document.getElementById('btn-again').addEventListener('click', () => {
-    navigate('study', { chapterId, mode })
-  })
+  document.getElementById('btn-again').addEventListener('click', () => navigate('study', { chapterId, mode }))
   document.getElementById('btn-home').addEventListener('click', () => navigate('home'))
 }

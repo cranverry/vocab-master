@@ -437,6 +437,40 @@ html, body {
 .ans-val { font-size: 18px; font-weight: 700; line-height: 1.4; }
 .ans-val.en { font-size: 22px; color: var(--accent); }
 
+/* ── Test Mode (typing / triple) ───────────────────────── */
+.test-wrap { display: flex; flex-direction: column; gap: 12px; }
+.test-prompt-card {
+  background: linear-gradient(135deg, #1e1040, #2d1b6e);
+  border-radius: var(--radius); padding: 24px; text-align: center;
+  border: 1px solid rgba(124,58,237,.3);
+}
+.test-prompt-label { font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+.test-prompt-word { font-size: 30px; font-weight: 800; }
+.test-section {
+  background: var(--bg2); border-radius: var(--radius);
+  padding: 14px; display: flex; flex-direction: column; gap: 8px;
+  border: 1px solid var(--bg3);
+}
+.test-section-label { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 2px; }
+.test-field { display: flex; align-items: center; gap: 8px; }
+.test-field input {
+  flex: 1; background: var(--bg3); border: 1px solid transparent;
+  border-radius: 8px; padding: 10px 12px; color: var(--text);
+  font-size: 15px; outline: none; transition: border-color .15s;
+}
+.test-field input:focus { border-color: var(--primary); }
+.test-field input:disabled { opacity: .7; }
+.test-field input.inp-correct { border-color: var(--green); background: rgba(34,197,94,.08); }
+.test-field input.inp-wrong   { border-color: var(--red);   background: rgba(239,68,68,.08); }
+.field-status { font-size: 14px; flex-shrink: 0; min-width: 60px; color: var(--text2); }
+.field-wrong-hint { font-size: 13px; color: var(--red); padding: 4px 0; }
+.btn-check-meaning {
+  background: var(--primary); border: none; border-radius: 8px;
+  padding: 8px 16px; color: white; font-size: 13px; font-weight: 600;
+  cursor: pointer; align-self: flex-start;
+}
+#test-done-area { margin-top: 4px; }
+
 /* ── Triple Mode (redesigned) ──────────────────────────── */
 .triple-wrap { display: flex; flex-direction: column; gap: 12px; }
 .triple-prompt-card {

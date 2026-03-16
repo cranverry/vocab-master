@@ -48,13 +48,13 @@ export function renderChapterDetail({ id } = {}) {
       <span>🃏</span><span>플래시카드</span>
     </button>
     <button class="study-btn copy" data-mode="copy" data-id="${id}">
-      <span>✍️</span><span>쓰기 연습 (보면서 타이핑)</span>
-    </button>
-    <button class="study-btn triple" data-mode="triple" data-id="${id}">
-      <span>🎯</span><span>3방향 테스트 (단어↔뜻↔동의어)</span>
+      <span>✍️</span><span>쓰기 연습 — 보면서 단어+동의어 타이핑</span>
     </button>
     <button class="study-btn typing" data-mode="typing" data-id="${id}">
-      <span>⌨️</span><span>타이핑 테스트 (뜻→단어)</span>
+      <span>⌨️</span><span>테스트 A — 영단어 보고 뜻+동의어 전부 입력</span>
+    </button>
+    <button class="study-btn triple" data-mode="triple" data-id="${id}">
+      <span>🎯</span><span>테스트 B — 동의어 1개 보고 단어+뜻+나머지 동의어 전부 입력</span>
     </button>
     <button class="study-btn srs ${due === 0 ? 'disabled' : ''}" data-mode="srs" data-id="${id}" ${due === 0 ? 'disabled' : ''}>
       <span>🔄</span><span>SRS 복습 ${due > 0 ? `(${due})` : '(없음)'}</span>
