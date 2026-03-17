@@ -27,49 +27,71 @@ export function parseMeaningParts(str) {
 }
 
 /**
- * Normalize a meaning unit for comparison.
- * Lowercases, collapses whitespace, trims.
+ * Normalize a meaning unit: lowercase, collapse whitespace, trim,
+ * strip trailing punctuation.
  */
-function normalizePart(s) {
-  return s.toLowerCase().replace(/\s+/g, ' ').trim()
+function norm(s) {
+  return s.toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:!?]+$/, '')
+    .trim()
 }
 
 /**
- * Split user input into meaning parts using any common delimiter.
- * Accepts: semicolons, commas, numbered prefixes, double spaces
+ * Aggressively parse user input into parts.
+ * Accepts all common separators:
+ *   , ; / | · •  double-space  numbered prefixes
  */
 function parseUserInput(str) {
   if (!str || !str.trim()) return []
 
-  // Strip numbered prefixes
-  let cleaned = str.replace(/\d+\.\s*/g, ' ')
+  // 1. Strip numbered prefixes (e.g. "1.", "2.", "1)" )
+  let cleaned = str
+    .replace(/\d+[.)]\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 
-  // Split by semicolons or commas
-  const parts = cleaned.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+  // 2. Try delimiter-based split
+  const DELIMITERS = /[;,\/|·•]/
+  const byDelim = cleaned.split(DELIMITERS).map(s => s.trim()).filter(Boolean)
+  if (byDelim.length > 1) return byDelim
 
-  if (parts.length > 1) return parts
+  // 3. Try two-or-more spaces
+  const byDoubleSpace = cleaned.split(/\s{2,}/).map(s => s.trim()).filter(Boolean)
+  if (byDoubleSpace.length > 1) return byDoubleSpace
 
-  // Fallback: split by two or more spaces
-  const bySpace = cleaned.split(/\s{2,}/).map(s => s.trim()).filter(Boolean)
-  if (bySpace.length > 1) return bySpace
-
-  return [cleaned.trim()]
+  // 4. Return as single part (substring matching will handle rest)
+  return [cleaned]
 }
 
 /**
  * Check if user input contains all required meaning parts.
+ *
+ * Strategy (in order):
+ *   A. Exact match after delimiter-based split
+ *   B. Substring match in the full normalized input
+ *      (handles "약속하다 예약하다 고용하다" with single spaces)
+ *
  * Returns { correct: boolean, missing: string[] }
  */
 export function checkMeaning(userInput, correctMeaning) {
   const required = parseMeaningParts(correctMeaning)
   if (required.length === 0) return { correct: true, missing: [] }
 
-  const userParts = parseUserInput(userInput)
-  const userNorm = userParts.map(normalizePart)
+  const userParts = parseUserInput(userInput).map(norm)
+  const fullNorm  = norm(userInput)
 
   const missing = required.filter(req => {
-    const rn = normalizePart(req)
-    return !userNorm.some(u => u === rn)
+    const rn = norm(req)
+
+    // A: exact part match (split-based)
+    if (userParts.some(u => u === rn)) return false
+
+    // B: substring match in full input
+    //    (단일 공백 구분, 번호 없이 나열한 경우 처리)
+    if (fullNorm.includes(rn)) return false
+
+    return true
   })
 
   return { correct: missing.length === 0, missing }
