@@ -38,11 +38,13 @@ function norm(s) {
 }
 
 /**
- * Normalize + remove ALL whitespace.
- * Used for comparing "행동원칙" vs "행동 원칙" as equivalent.
+ * Normalize + remove ALL whitespace AND punctuation.
+ * Used for fuzzy comparison:
+ *   "행동원칙"       == "행동 원칙"       (공백 차이)
+ *   "가득찬 수없이 많은" == "가득찬, 수없이 많은"  (쉼표 차이)
  */
 function normStrip(s) {
-  return norm(s).replace(/\s+/g, '')
+  return norm(s).replace(/[\s,;:.!?·•\/|~\-()]+/g, '')
 }
 
 /**
