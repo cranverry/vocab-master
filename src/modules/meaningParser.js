@@ -38,6 +38,14 @@ function norm(s) {
 }
 
 /**
+ * Normalize + remove ALL whitespace.
+ * Used for comparing "행동원칙" vs "행동 원칙" as equivalent.
+ */
+function normStrip(s) {
+  return norm(s).replace(/\s+/g, '')
+}
+
+/**
  * Aggressively parse user input into parts.
  * Accepts all common separators:
  *   , ; / | · •  double-space  numbered prefixes
@@ -69,8 +77,10 @@ function parseUserInput(str) {
  *
  * Strategy (in order):
  *   A. Exact match after delimiter-based split
- *   B. Substring match in the full normalized input
- *      (handles "약속하다 예약하다 고용하다" with single spaces)
+ *   B. Substring match in full normalized input
+ *      (handles single-space separated: "약속하다 예약하다 고용하다")
+ *   C. Space-stripped substring match
+ *      (handles "행동원칙" vs "행동 원칙", "make up" vs "makeup")
  *
  * Returns { correct: boolean, missing: string[] }
  */
@@ -78,18 +88,23 @@ export function checkMeaning(userInput, correctMeaning) {
   const required = parseMeaningParts(correctMeaning)
   if (required.length === 0) return { correct: true, missing: [] }
 
-  const userParts = parseUserInput(userInput).map(norm)
-  const fullNorm  = norm(userInput)
+  const userParts    = parseUserInput(userInput).map(norm)
+  const fullNorm     = norm(userInput)
+  const fullNoSpace  = normStrip(userInput)
 
   const missing = required.filter(req => {
-    const rn = norm(req)
+    const rn          = norm(req)
+    const rnNoSpace   = normStrip(req)
 
-    // A: exact part match (split-based)
+    // A: exact part match (delimiter-split)
     if (userParts.some(u => u === rn)) return false
 
-    // B: substring match in full input
-    //    (단일 공백 구분, 번호 없이 나열한 경우 처리)
+    // B: substring match in full normalized input
     if (fullNorm.includes(rn)) return false
+
+    // C: space-stripped substring match
+    //    "행동원칙" matches "행동 원칙", "格言행동원칙" matches "행동 원칙"
+    if (rnNoSpace && fullNoSpace.includes(rnNoSpace)) return false
 
     return true
   })
