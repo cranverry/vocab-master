@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PRD: 아웃소싱 자동정산 시스템</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e2e4ec;
+      --muted: #8b8fa8;
+      --accent: #8b5cf6;
+      --accent2: #06b6d4;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+    .layout { display: flex; min-height: 100vh; }
+
+    /* TOC */
+    .toc {
+      width: 250px; min-width: 250px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 14px;
+      position: sticky; top: 0; height: 100vh;
+      overflow-y: auto;
+    }
+    .toc-brand {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 6px 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .toc-icon {
+      width: 26px; height: 26px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+    }
+    .toc-label { font-size: 12px; font-weight: 700; color: var(--text); }
+    .toc-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .toc-title {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 10px; padding: 0 6px;
+    }
+    .toc a {
+      display: block; padding: 5px 8px;
+      color: var(--muted); text-decoration: none;
+      font-size: 12.5px; border-radius: 6px;
+      transition: all 0.15s;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      border-left: 2px solid transparent;
+    }
+    .toc a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .toc a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(139,92,246,0.08); }
+    .toc a.h3 { padding-left: 20px; font-size: 11.5px; }
+
+    /* Main */
+    .main { flex: 1; max-width: 900px; padding: 48px 44px; margin: 0 auto; }
+
+    /* Header */
+    .doc-header {
+      background: linear-gradient(135deg, rgba(139,92,246,0.12), rgba(6,182,212,0.08));
+      border: 1px solid rgba(139,92,246,0.25);
+      border-radius: 12px; padding: 28px 32px; margin-bottom: 40px;
+    }
+    .doc-header h1 {
+      font-size: 22px; font-weight: 800; margin-bottom: 10px;
+      background: linear-gradient(90deg, #a78bfa, #67e8f9);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .doc-meta { display: flex; gap: 10px; flex-wrap: wrap; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 11.5px; font-weight: 600;
+    }
+    .badge-purple { background: rgba(139,92,246,0.15); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.2); }
+    .badge-cyan { background: rgba(6,182,212,0.12); color: #67e8f9; border: 1px solid rgba(6,182,212,0.2); }
+    .badge-yellow { background: rgba(234,179,8,0.12); color: #fde047; border: 1px solid rgba(234,179,8,0.2); }
+    .badge-default { background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+
+    /* Progress bar */
+    .progress { position: fixed; top: 0; left: 0; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.1s; z-index: 999; }
+
+    /* Content */
+    #content h1 { display: none; }
+    #content h2 {
+      font-size: 19px; font-weight: 700; color: var(--text);
+      margin: 48px 0 16px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      scroll-margin-top: 20px;
+    }
+    #content h3 {
+      font-size: 14.5px; font-weight: 700; color: var(--accent2);
+      margin: 28px 0 12px; scroll-margin-top: 20px;
+    }
+    #content h4 {
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin: 20px 0 8px;
+    }
+    #content p { margin-bottom: 12px; font-size: 14px; color: #c8cadb; }
+    #content strong { color: var(--text); }
+    #content ul, #content ol { margin: 8px 0 12px 20px; font-size: 14px; color: #c8cadb; }
+    #content li { margin-bottom: 4px; }
+    #content hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+    #content blockquote {
+      border-left: 3px solid var(--accent); padding: 10px 16px;
+      margin: 14px 0; background: rgba(139,92,246,0.06);
+      border-radius: 0 6px 6px 0; color: #c4b5fd; font-size: 13.5px;
+    }
+    #content pre {
+      background: #0a0c14; border: 1px solid var(--border);
+      border-radius: 10px; padding: 18px 20px;
+      overflow-x: auto; margin: 14px 0; font-size: 12.5px; line-height: 1.65;
+    }
+    #content pre code { color: #a5f3fc; font-family: 'SF Mono','Fira Code',monospace; }
+    #content :not(pre) > code {
+      background: rgba(139,92,246,0.14); color: #c4b5fd;
+      padding: 2px 6px; border-radius: 4px; font-size: 12.5px;
+      font-family: 'SF Mono','Fira Code',monospace;
+    }
+    #content table { width: 100%; border-collapse: collapse; margin: 14px 0 22px; font-size: 13.5px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    #content thead th { background: var(--surface); padding: 10px 14px; text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
+    #content tbody td { padding: 9px 14px; border-bottom: 1px solid rgba(42,45,58,0.6); color: #c8cadb; }
+    #content tbody tr:last-child td { border-bottom: none; }
+    #content tbody tr:hover td { background: rgba(255,255,255,0.025); }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 768px) {
+      .toc { display: none; }
+      .main { padding: 24px 18px; }
+    }
+  </style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="layout">
+  <nav class="toc" id="toc">
+    <div class="toc-brand">
+      <div class="toc-icon">🎨</div>
+      <div>
+        <div class="toc-label">EDEN-SPECTRUM</div>
+        <div class="toc-sub">정산 자동화 PRD</div>
+      </div>
+    </div>
+    <div class="toc-title">목차</div>
+  </nav>
+
+  <main class="main">
+    <div class="doc-header">
+      <h1>아웃소싱 자동정산 시스템</h1>
+      <div class="doc-meta">
+        <span class="badge badge-purple">PRD-settlement-v1</span>
+        <span class="badge badge-cyan" id="badge-date">2026-03-31</span>
+        <span class="badge badge-yellow">◐ Draft</span>
+        <span class="badge badge-default">작성: Milo</span>
+        <span class="badge badge-default">EDEN-HUB</span>
+      </div>
+    </div>
+    <div id="content"></div>
+  </main>
+</div>
+
+<script>
+const RAW_URL = 'https://raw.githubusercontent.com/cranverry/vocab-master/main/docs/PRD-outsourcing-settlement.md';
+
+async function load() {
+  const content = document.getElementById('content');
+  const toc = document.getElementById('toc');
+
+  content.innerHTML = '<p style="color:var(--muted);padding:20px 0">문서 로드 중...</p>';
+
+  try {
+    const res = await fetch(RAW_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const md = await res.text();
+
+    // 제목(h1) 제거 후 렌더
+    const body = md.replace(/^#\s+.+\n/, '');
+    content.innerHTML = marked.parse(body);
+
+    // TOC 빌드
+    document.querySelectorAll('#content h2, #content h3').forEach(function(h, i) {
+      const id = 'h-' + i;
+      h.id = id;
+      const a = document.createElement('a');
+      a.href = '#' + id;
+      a.textContent = h.textContent;
+      a.className = h.tagName === 'H3' ? 'h3' : '';
+      toc.appendChild(a);
+    });
+
+    // Active TOC 하이라이트
+    const observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting) {
+          document.querySelectorAll('.toc a').forEach(function(a) { a.classList.remove('active'); });
+          const active = document.querySelector('.toc a[href="#' + e.target.id + '"]');
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20px 0px -75% 0px' });
+    document.querySelectorAll('#content h2, #content h3').forEach(function(h) { observer.observe(h); });
+
+  } catch(e) {
+    content.innerHTML = '<p style="color:var(--red)">로드 실패: ' + e.message + '</p>';
+  }
+}
+
+// 스크롤 진행 바
+window.addEventListener('scroll', function() {
+  const pct = window.scrollY / (document.body.scrollHeight - window.innerHeight) * 100;
+  document.getElementById('progress').style.width = Math.min(pct, 100) + '%';
+});
+
+load();
+</script>
+</body>
+</html>
